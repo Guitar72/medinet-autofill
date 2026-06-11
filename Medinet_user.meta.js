@@ -6,4 +6,6 @@
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.meta.js
+// @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.js
 // ==/UserScript==
