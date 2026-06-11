@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      26.06.12
+// @version      6.11
 // @description  Nut Thao Tac Nhanh nam trong header + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
-// @grant        none
+// @grant        GM_setClipboard
 // @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.js
 // ==/UserScript==
@@ -1237,7 +1237,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '26.06.11';
+                var CURRENT_VERSION = '6.11';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -1391,7 +1391,44 @@
                 installBtn.addEventListener('mouseenter', function() { installBtn.style.filter = 'brightness(1.1)'; installBtn.style.transform = 'translateY(-1px)'; });
                 installBtn.addEventListener('mouseleave', function() { installBtn.style.filter = ''; installBtn.style.transform = 'translateY(0)'; });
                 installBtn.addEventListener('click', function() {
-                    window.open(RAW_URL, '_blank');
+                    // Copy URL vào clipboard
+                    try { GM_setClipboard(RAW_URL); } catch(e) {
+                        try {
+                            var ta = document.createElement('textarea');
+                            ta.value = RAW_URL; document.body.appendChild(ta);
+                            ta.select(); document.execCommand('copy');
+                            document.body.removeChild(ta);
+                        } catch(e2) {}
+                    }
+                    // Mở Tampermonkey Utilities tab
+                    var tmId = null;
+                    var knownIds = [
+                        'dhdgffkkebhmkfjojejmpbldmpobfkfo', // Chrome stable
+                        'gcalenpjmijncebpfijmoaglllgpjagf', // Chrome beta
+                        'lcmhiflmkkekcbknnhgpnodjfldoecnf', // Edge
+                    ];
+                    for (var i = 0; i < knownIds.length; i++) {
+                        try {
+                            var url = 'chrome-extension://' + knownIds[i] + '/options.html#nav=utils';
+                            window.open(url, '_blank');
+                            tmId = knownIds[i]; break;
+                        } catch(e) {}
+                    }
+                    // Hiện hướng dẫn ngay trong popup
+                    installBtn.style.display = 'none';
+                    var guide = document.createElement('div');
+                    Object.assign(guide.style, {
+                        background: '#fffbeb', border: '2px solid #fbbf24',
+                        borderRadius: '10px', padding: '14px 16px',
+                        marginBottom: '10px', fontSize: '15px',
+                        color: '#92400e', lineHeight: '1.8',
+                    });
+                    guide.innerHTML =
+                        '<b style="font-size:16px">\u2705 \u0110\u00e3 copy URL v\u00e0 m\u1edf Tampermonkey!</b><br>' +
+                        '1\ufe0f\u20e3 Trong tab vừa mở → mục <b>Import from URL</b><br>' +
+                        '2\ufe0f\u20e3 Nhấn vào ô trắng → <b>Ctrl+V</b> để dán<br>' +
+                        '3\ufe0f\u20e3 Nhấn nút <b>Import</b> → <b>Install</b> là xong!';
+                    installBtn.parentNode.insertBefore(guide, installBtn);
                 });
 
                 checkBtn.addEventListener('click', function() {
@@ -1565,7 +1602,7 @@
                 card.appendChild(contact);
                 // Copyright
                 var copy = document.createElement('div');
-                copy.textContent = '\u00a9 Copyright @ Hoang Anh Jupiter';
+                copy.textContent = 'Copyright \u00a9 Hoang Anh Jupiter';
                 Object.assign(copy.style, {
                     fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px',
                 });
