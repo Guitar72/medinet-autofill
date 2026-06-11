@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      26.06.11
+// @version      26.06.12
 // @description  Nut Thao Tac Nhanh nam trong header + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -1267,86 +1267,129 @@
                 overlay.id = MODAL_ID;
                 Object.assign(overlay.style, {
                     position: 'fixed', inset: '0', zIndex: '9999999',
-                    background: 'rgba(0,0,0,0.5)', display: 'flex',
+                    background: 'rgba(0,0,0,0.55)', display: 'flex',
                     alignItems: 'center', justifyContent: 'center',
                     fontFamily: 'Segoe UI, Arial, sans-serif',
-                    backdropFilter: 'blur(3px)',
+                    backdropFilter: 'blur(4px)',
                 });
                 var card = document.createElement('div');
                 Object.assign(card.style, {
-                    background: '#fff', borderRadius: '14px',
-                    padding: '24px 28px 20px', width: '340px', maxWidth: '92vw',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
-                    position: 'relative',
+                    background: '#fff', borderRadius: '18px',
+                    padding: '0', width: '420px', maxWidth: '94vw',
+                    boxShadow: '0 24px 60px rgba(0,0,0,0.35)',
+                    position: 'relative', overflow: 'hidden',
                 });
+
+                // header strip
+                var header = document.createElement('div');
+                Object.assign(header.style, {
+                    background: 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)',
+                    padding: '20px 24px 18px',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                });
+                var headerIcon = document.createElement('span');
+                headerIcon.textContent = '\ud83d\udd04';
+                Object.assign(headerIcon.style, { fontSize: '28px', lineHeight: '1' });
+                var headerText = document.createElement('div');
+                var headerTitle = document.createElement('div');
+                headerTitle.textContent = 'C\u1eadp nh\u1eadt phi\u00ean b\u1ea3n';
+                Object.assign(headerTitle.style, {
+                    fontSize: '20px', fontWeight: '700', color: '#fff', lineHeight: '1.2',
+                });
+                var headerSub = document.createElement('div');
+                headerSub.textContent = 'Medinet Script';
+                Object.assign(headerSub.style, {
+                    fontSize: '13px', color: 'rgba(255,255,255,0.75)', marginTop: '2px',
+                });
+                headerText.appendChild(headerTitle);
+                headerText.appendChild(headerSub);
+                header.appendChild(headerIcon);
+                header.appendChild(headerText);
+                card.appendChild(header);
 
                 // close button
                 var closeBtn2 = document.createElement('button');
                 closeBtn2.innerHTML = '\u00d7';
                 Object.assign(closeBtn2.style, {
-                    position: 'absolute', top: '10px', right: '14px',
-                    background: 'none', border: 'none', fontSize: '20px',
-                    color: '#6b7280', cursor: 'pointer', lineHeight: '1',
+                    position: 'absolute', top: '12px', right: '16px',
+                    background: 'rgba(255,255,255,0.25)', border: 'none',
+                    fontSize: '22px', color: '#fff', cursor: 'pointer',
+                    lineHeight: '1', width: '32px', height: '32px',
+                    borderRadius: '50%', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    fontWeight: '300',
                 });
+                closeBtn2.addEventListener('mouseenter', function() { closeBtn2.style.background = 'rgba(255,255,255,0.4)'; });
+                closeBtn2.addEventListener('mouseleave', function() { closeBtn2.style.background = 'rgba(255,255,255,0.25)'; });
                 closeBtn2.addEventListener('click', function() { overlay.remove(); });
                 card.appendChild(closeBtn2);
 
-                // title
-                var title = document.createElement('div');
-                title.textContent = '\ud83d\udd04 C\u1eadp nh\u1eadt phi\u00ean b\u1ea3n';
-                Object.assign(title.style, {
-                    fontSize: '16px', fontWeight: '700', color: '#0369a1',
-                    marginBottom: '12px',
-                });
-                card.appendChild(title);
+                // body
+                var body = document.createElement('div');
+                Object.assign(body.style, { padding: '22px 24px 20px' });
 
-                // current version row
-                var curRow = document.createElement('div');
-                curRow.innerHTML = 'Phi\u00ean b\u1ea3n hi\u1ec7n t\u1ea1i: <b style="color:#0369a1">' + CURRENT_VERSION + '</b>';
-                Object.assign(curRow.style, { fontSize: '13px', color: '#374151', marginBottom: '14px' });
-                card.appendChild(curRow);
+                // version info row
+                var verBox = document.createElement('div');
+                Object.assign(verBox.style, {
+                    background: '#f0f9ff', border: '1px solid #bae6fd',
+                    borderRadius: '10px', padding: '14px 18px',
+                    marginBottom: '16px', display: 'flex',
+                    alignItems: 'center', justifyContent: 'space-between',
+                });
+                var verLabel = document.createElement('span');
+                verLabel.textContent = 'Phi\u00ean b\u1ea3n hi\u1ec7n t\u1ea1i';
+                Object.assign(verLabel.style, { fontSize: '15px', color: '#374151' });
+                var verValue = document.createElement('span');
+                verValue.textContent = CURRENT_VERSION;
+                Object.assign(verValue.style, {
+                    fontSize: '18px', fontWeight: '700', color: '#0369a1',
+                    background: '#e0f2fe', padding: '3px 12px', borderRadius: '20px',
+                });
+                verBox.appendChild(verLabel);
+                verBox.appendChild(verValue);
+                body.appendChild(verBox);
 
                 // status area
                 var statusArea = document.createElement('div');
-                statusArea.textContent = '\u2026 \u0110ang ki\u1ec3m tra';
+                statusArea.textContent = '\u23f3 \u0110ang ki\u1ec3m tra ph\u00eci\u00ean b\u1ea3n m\u1edbi...';
                 Object.assign(statusArea.style, {
-                    fontSize: '13px', color: '#6b7280', minHeight: '22px',
-                    marginBottom: '14px', lineHeight: '1.5',
+                    fontSize: '15px', color: '#6b7280', minHeight: '28px',
+                    marginBottom: '18px', lineHeight: '1.6',
+                    padding: '10px 14px', borderRadius: '8px',
+                    background: '#f9fafb', border: '1px solid #e5e7eb',
+                    textAlign: 'center',
                 });
-                card.appendChild(statusArea);
-
-                // separator
-                var sep = document.createElement('div');
-                Object.assign(sep.style, { height: '1px', background: '#e5e7eb', margin: '10px 0 14px' });
-                card.appendChild(sep);
+                body.appendChild(statusArea);
 
                 // --- check button ---
                 var checkBtn = document.createElement('button');
                 checkBtn.textContent = '\ud83d\udd0d Ki\u1ec3m tra c\u1eadp nh\u1eadt';
                 Object.assign(checkBtn.style, {
-                    display: 'block', width: '100%', padding: '10px',
+                    display: 'block', width: '100%', padding: '13px',
                     background: '#0369a1', color: '#fff',
-                    border: 'none', borderRadius: '8px',
-                    fontSize: '13px', fontWeight: '600',
+                    border: 'none', borderRadius: '10px',
+                    fontSize: '16px', fontWeight: '700',
                     cursor: 'pointer', marginBottom: '10px',
-                    transition: 'background 0.15s',
+                    transition: 'background 0.15s, transform 0.1s',
+                    letterSpacing: '0.3px',
                 });
-                checkBtn.addEventListener('mouseenter', function() { checkBtn.style.background = '#075985'; });
-                checkBtn.addEventListener('mouseleave', function() { checkBtn.style.background = '#0369a1'; });
+                checkBtn.addEventListener('mouseenter', function() { checkBtn.style.background = '#075985'; checkBtn.style.transform = 'translateY(-1px)'; });
+                checkBtn.addEventListener('mouseleave', function() { checkBtn.style.background = '#0369a1'; checkBtn.style.transform = 'translateY(0)'; });
 
                 // install button (hidden by default)
                 var installBtn = document.createElement('button');
                 installBtn.textContent = '\u2b07\ufe0f C\u00e0i \u0111\u1eb7t phi\u00ean b\u1ea3n m\u1edbi';
                 Object.assign(installBtn.style, {
-                    display: 'none', width: '100%', padding: '10px',
-                    background: '#16a34a', color: '#fff',
-                    border: 'none', borderRadius: '8px',
-                    fontSize: '13px', fontWeight: '600',
+                    display: 'none', width: '100%', padding: '13px',
+                    background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                    color: '#fff', border: 'none', borderRadius: '10px',
+                    fontSize: '16px', fontWeight: '700',
                     cursor: 'pointer', marginBottom: '10px',
-                    transition: 'background 0.15s',
+                    transition: 'filter 0.15s, transform 0.1s',
+                    letterSpacing: '0.3px',
                 });
-                installBtn.addEventListener('mouseenter', function() { installBtn.style.background = '#15803d'; });
-                installBtn.addEventListener('mouseleave', function() { installBtn.style.background = '#16a34a'; });
+                installBtn.addEventListener('mouseenter', function() { installBtn.style.filter = 'brightness(1.1)'; installBtn.style.transform = 'translateY(-1px)'; });
+                installBtn.addEventListener('mouseleave', function() { installBtn.style.filter = ''; installBtn.style.transform = 'translateY(0)'; });
                 installBtn.addEventListener('click', function() {
                     window.open(RAW_URL, '_blank');
                 });
@@ -1354,7 +1397,11 @@
                 checkBtn.addEventListener('click', function() {
                     checkBtn.disabled = true;
                     checkBtn.textContent = '\u23f3 \u0110ang ki\u1ec3m tra\u2026';
-                    statusArea.textContent = '';
+                    checkBtn.style.background = '#7dd3fc';
+                    statusArea.style.color = '#6b7280';
+                    statusArea.style.background = '#f9fafb';
+                    statusArea.style.borderColor = '#e5e7eb';
+                    statusArea.textContent = '\u23f3 \u0110ang k\u1ebft n\u1ed1i t\u1edbi server...';
                     installBtn.style.display = 'none';
                     var xhr = new XMLHttpRequest();
                     xhr.open('GET', META_URL + '?t=' + Date.now(), true);
@@ -1362,62 +1409,80 @@
                     xhr.onload = function() {
                         checkBtn.disabled = false;
                         checkBtn.textContent = '\ud83d\udd0d Ki\u1ec3m tra c\u1eadp nh\u1eadt';
+                        checkBtn.style.background = '#0369a1';
                         if (xhr.status === 200) {
                             var remoteVer = extractVersion(xhr.responseText);
                             if (!remoteVer) {
-                                statusArea.style.color = '#ef4444';
+                                statusArea.style.color = '#b91c1c';
+                                statusArea.style.background = '#fef2f2';
+                                statusArea.style.borderColor = '#fca5a5';
                                 statusArea.textContent = '\u26a0\ufe0f Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c phi\u00ean b\u1ea3n t\u1eeb server.';
                             } else if (versionGt(remoteVer, CURRENT_VERSION)) {
-                                statusArea.style.color = '#16a34a';
-                                statusArea.innerHTML = '\u2705 C\u00f3 phi\u00ean b\u1ea3n m\u1edbi: <b>' + remoteVer + '</b>';
+                                statusArea.style.color = '#15803d';
+                                statusArea.style.background = '#f0fdf4';
+                                statusArea.style.borderColor = '#86efac';
+                                statusArea.innerHTML = '\u2705 C\u00f3 phi\u00ean b\u1ea3n m\u1edbi: <b style="font-size:17px">' + remoteVer + '</b>';
                                 installBtn.style.display = 'block';
                             } else {
-                                statusArea.style.color = '#16a34a';
-                                statusArea.textContent = '\u2705 \u0110ang d\u00f9ng phi\u00ean b\u1ea3n m\u1edbi nh\u1ea5t!';
+                                statusArea.style.color = '#15803d';
+                                statusArea.style.background = '#f0fdf4';
+                                statusArea.style.borderColor = '#86efac';
+                                statusArea.textContent = '\u2705 B\u1ea1n \u0111ang d\u00f9ng phi\u00ean b\u1ea3n m\u1edbi nh\u1ea5t!';
                             }
                         } else {
-                            statusArea.style.color = '#ef4444';
+                            statusArea.style.color = '#b91c1c';
+                            statusArea.style.background = '#fef2f2';
+                            statusArea.style.borderColor = '#fca5a5';
                             statusArea.textContent = '\u26a0\ufe0f L\u1ed7i k\u1ebft n\u1ed1i (' + xhr.status + '). Ki\u1ec3m tra l\u1ea1i sau.';
                         }
                     };
                     xhr.onerror = xhr.ontimeout = function() {
                         checkBtn.disabled = false;
                         checkBtn.textContent = '\ud83d\udd0d Ki\u1ec3m tra c\u1eadp nh\u1eadt';
-                        statusArea.style.color = '#ef4444';
+                        checkBtn.style.background = '#0369a1';
+                        statusArea.style.color = '#b91c1c';
+                        statusArea.style.background = '#fef2f2';
+                        statusArea.style.borderColor = '#fca5a5';
                         statusArea.textContent = '\u26a0\ufe0f Kh\u00f4ng th\u1ec3 k\u1ebft n\u1ed1i. Ki\u1ec3m tra l\u1ea1i sau.';
                     };
                     xhr.send();
                 });
 
-                card.appendChild(checkBtn);
-                card.appendChild(installBtn);
+                body.appendChild(checkBtn);
+                body.appendChild(installBtn);
+
+                // divider
+                var div2 = document.createElement('div');
+                Object.assign(div2.style, { height: '1px', background: '#e5e7eb', margin: '14px 0' });
+                body.appendChild(div2);
 
                 // --- auto-update checkbox ---
                 var autoRow = document.createElement('label');
                 Object.assign(autoRow.style, {
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    fontSize: '12px', color: '#6b7280', cursor: 'pointer',
-                    marginTop: '4px',
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    fontSize: '15px', color: '#374151', cursor: 'pointer',
                 });
                 var chk = document.createElement('input');
                 chk.type = 'checkbox';
                 chk.checked = getAutoUpdate();
-                Object.assign(chk.style, { cursor: 'pointer', width: '15px', height: '15px' });
+                Object.assign(chk.style, { cursor: 'pointer', width: '18px', height: '18px', accentColor: '#0369a1' });
                 chk.addEventListener('change', function() { setAutoUpdate(chk.checked); });
                 var chkLabel = document.createElement('span');
                 chkLabel.textContent = 'T\u1ef1 \u0111\u1ed9ng c\u1eadp nh\u1eadt khi c\u00f3 phi\u00ean b\u1ea3n m\u1edbi';
                 autoRow.appendChild(chk);
                 autoRow.appendChild(chkLabel);
-                card.appendChild(autoRow);
+                body.appendChild(autoRow);
 
                 // note about auto-update
                 var autoNote = document.createElement('div');
                 autoNote.textContent = '\u24d8 Khi b\u1eadt, script s\u1ebd ki\u1ec3m tra t\u1ef1 \u0111\u1ed9ng m\u1ed7i l\u1ea7n t\u1ea3i trang v\u00e0 m\u1edf tab c\u00e0i \u0111\u1eb7t n\u1ebfu c\u00f3 phi\u00ean b\u1ea3n m\u1edbi.';
                 Object.assign(autoNote.style, {
-                    fontSize: '11px', color: '#9ca3af', marginTop: '8px', lineHeight: '1.5',
+                    fontSize: '13px', color: '#9ca3af', marginTop: '8px', lineHeight: '1.6',
+                    paddingLeft: '28px',
                 });
-                card.appendChild(autoNote);
+                body.appendChild(autoNote);
 
+                card.appendChild(body);
                 overlay.appendChild(card);
                 overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
                 document.body.appendChild(overlay);
