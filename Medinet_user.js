@@ -1235,9 +1235,9 @@
                 //  RAW_URL: \u0111\u01b0\u1eddng d\u1eabn raw t\u1edbi file .user.js tr\u00ean GitHub
                 //  META_URL: \u0111\u01b0\u1eddng d\u1eabn raw t\u1edbi file .meta.js (ch\u1ec9 ch\u1ee9a ==UserScript== header)
                 // ============================================================
-                var RAW_URL  = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/Medinet_user.js';
-                var META_URL = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.5.9';
+                var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
+                var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
+                var CURRENT_VERSION = '26.06.11';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
