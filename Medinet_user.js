@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.12.1
+// @version      6.12.2
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -182,38 +182,98 @@
     //  TIEN ICH CHON DX-SELECT-BOX THEO TEN CLASS FIELD VA LABEL
     // ================================================================
 
+    /**
+     * selectDxSelectBox:
+     * Mo dropdown, neu co search input thi go text de loc,
+     * sau do chon item dau tien khop voi label.
+     */
     function selectDxSelectBox(fieldCls, label, cb) {
         var fieldItem = document.querySelector('.' + fieldCls);
         if (!fieldItem) { if (cb) cb(); return; }
         var selectBox = fieldItem.querySelector('dx-select-box');
         if (!selectBox) { if (cb) cb(); return; }
+
+        // Mo dropdown
         var dropBtn = selectBox.querySelector('.dx-dropdowneditor-button');
-        var input = selectBox.querySelector('input.dx-texteditor-input');
+        var mainInput = selectBox.querySelector('input.dx-texteditor-input');
         if (dropBtn) pointerClick(dropBtn);
-        else if (input) pointerClick(input);
+        else if (mainInput) pointerClick(mainInput);
+
+        // Doi popup mo
         setTimeout(function() {
-            var labelNorm = label.trim().toLowerCase();
-            var found = null;
-            var allItems = document.querySelectorAll(
-                '.dx-dropdowneditor-overlay .dx-list-item[role="option"],' +
-                '.dx-popup-wrapper .dx-list-item[role="option"]'
-            );
-            allItems.forEach(function(item) {
+            // Tim overlay popup dang hien (visible, khong an)
+            // dx-select-box voi search=true se co dx-list-search input ben trong popup
+            var overlayVisible = null;
+            document.querySelectorAll(
+                '.dx-dropdowneditor-overlay, .dx-popup-wrapper'
+            ).forEach(function(el) {
+                if (overlayVisible) return;
+                // Kiem tra visibility: khong phai display:none va khong co aria-hidden=true
+                if (el.style.display === 'none') return;
+                if (el.getAttribute('aria-hidden') === 'true') return;
+                // Kiem tra co list-item ben trong (popup dang mo)
+                if (el.querySelector('.dx-list-item')) overlayVisible = el;
+            });
+
+            // Tim search input: la input type=text co role=textbox trong popup
+            // (khac voi main input cua select-box)
+            var searchInput = null;
+            if (overlayVisible) {
+                // dx-list-search: class dac trung cua search box trong dx-select-box popup
+                var listSearch = overlayVisible.querySelector('.dx-list-search input, .dx-searchbox input');
+                if (listSearch) searchInput = listSearch;
+                else {
+                    // Fallback: input text trong popup (khong phai hidden)
+                    var allInputs = overlayVisible.querySelectorAll('input[type="text"]');
+                    if (allInputs.length > 0) searchInput = allInputs[allInputs.length - 1];
+                }
+            }
+
+            function doSearch(inp) {
+                inp.focus({ preventScroll: true });
+                nativeSetter.call(inp, label);
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                // Sau khi go, doi Angular/DevExtreme filter xong roi chon
+                setTimeout(function() { pickFirstMatch(label, cb); }, 1000);
+            }
+
+            if (searchInput) {
+                doSearch(searchInput);
+            } else {
+                // Khong co search => chon truc tiep
+                pickFirstMatch(label, cb);
+            }
+        }, 700);
+    }
+
+    /** Chon item dau tien trong dropdown dang mo co text khop label */
+    function pickFirstMatch(label, cb) {
+        var labelNorm = label.trim().toLowerCase();
+        var found = null;
+        var candidates = document.querySelectorAll(
+            '.dx-dropdowneditor-overlay .dx-list-item[role="option"]:not(.dx-state-invisible),' +
+            '.dx-popup-wrapper .dx-list-item[role="option"]:not(.dx-state-invisible)'
+        );
+        candidates.forEach(function(item) {
+            if (found) return;
+            var txt = (item.textContent || '').trim().toLowerCase();
+            if (txt.indexOf(labelNorm) !== -1) found = item;
+        });
+        if (!found) {
+            // Fallback: tim trong toan trang
+            document.querySelectorAll('.dx-list-item[role="option"]').forEach(function(item) {
                 if (found) return;
                 var txt = (item.textContent || '').trim().toLowerCase();
                 if (txt.indexOf(labelNorm) !== -1) found = item;
             });
-            if (!found) {
-                document.querySelectorAll('.dx-list-item[role="option"]').forEach(function(item) {
-                    if (found) return;
-                    var txt = (item.textContent || '').trim().toLowerCase();
-                    if (txt.indexOf(labelNorm) !== -1) found = item;
-                });
-            }
-            if (found) { pointerClick(found); }
-            else { showToast('\u26a0 Kh\u00f4ng t\u00ecm th\u1ea5y: ' + label); }
-            if (cb) setTimeout(cb, 400);
-        }, 700);
+        }
+        if (found) {
+            pointerClick(found);
+        } else {
+            showToast('\u26a0 Kh\u00f4ng t\u00ecm th\u1ea5y: ' + label);
+        }
+        if (cb) setTimeout(cb, 400);
     }
 
     function selectListRadioByLabel(label) {
@@ -235,18 +295,19 @@
 
     function fillThongTinHanhChinh() {
         showToast('\u23f3 \u0110ang \u0111i\u1ec1n Th\u00f4ng tin h\u00e0nh ch\u00ednh...');
-        // B1: Dia diem kham -> "Kham luu dong"
+        // B1: Dia diem kham -> "Kham luu dong" (dropdown don gian, khong co search)
         selectDxSelectBox('DoiTuongKham', 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng', function() {
-            // B2: Xa/Phuong -> "Bac Tan Uyen"
+            // B2: Xa/Phuong -> "Bac Tan Uyen" (co search input, can go tim kiem)
+            // Them delay de dam bao B1 da dong popup truoc
             setTimeout(function() {
                 selectDxSelectBox('DiaChiHienTai_XaPhuong', 'B\u1eafc T\u00e2n Uy\u00ean', function() {
                     // B3: Hinh thuc chi tra -> "Ngan sach thanh pho ho tro"
                     setTimeout(function() {
                         selectListRadioByLabel('Ng\u00e2n s\u00e1ch th\u00e0nh ph\u1ed1 h\u1ed7 tr\u1ee3');
                         showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
-                    }, 500);
+                    }, 600);
                 });
-            }, 600);
+            }, 800);
         });
     }
 
@@ -1321,7 +1382,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.12.1';
+                var CURRENT_VERSION = '6.12.2';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2031,7 +2092,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.12.1';
+        var CURRENT_VERSION = '6.12.2';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
