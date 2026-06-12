@@ -1237,7 +1237,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.11';
+                var CURRENT_VERSION = '6.12';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
