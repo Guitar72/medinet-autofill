@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.12.3
-// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut
+// @version      6.13
+// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
@@ -367,14 +367,12 @@
 
     function fillThongTinHanhChinh() {
         showToast('\u23f3 \u0110ang \u0111i\u1ec1n Th\u00f4ng tin h\u00e0nh ch\u00ednh...');
-        // B1: Xa/Phuong -> "Xa Bac Tan Uyen" (go truc tiep vao input roi Enter,
-        // KHONG dung selectDxSelectBox vi danh sach chua load het)
+        // B1: Xa/Phuong -> "Xa Bac Tan Uyen"
         typeAndEnterSelectBox('DiaChiHienTai_XaPhuong', 'X\u00e3 B\u1eafc T\u00e2n Uy\u00ean', function() {
             // B2: Hinh thuc chi tra -> "Ngan sach thanh pho ho tro"
             setTimeout(function() {
                 selectListRadioByLabel('Ng\u00e2n s\u00e1ch th\u00e0nh ph\u1ed1 h\u1ed7 tr\u1ee3');
                 // B3: Dia diem kham -> "Kham luu dong"
-                // Them delay de dam bao B2 da hoan tat truoc
                 setTimeout(function() {
                     selectDxSelectBox('DoiTuongKham', 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng', function() {
                         showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
@@ -1455,7 +1453,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.12.3';
+                var CURRENT_VERSION = '6.13';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2150,6 +2148,301 @@
     });
 
     // ================================================================
+    //  AUTO-PHOTO: Tu dong khop anh benh nhan theo ten + nam sinh
+    //
+    //  Luong hoat dong:
+    //  1. Lan dau click vao vung File anh -> mo chon THU MUC (webkitdirectory)
+    //  2. Quet toan bo file anh trong thu muc, luu vao _photoMap (session)
+    //  3. Doc HoVaTen + NamSinh tu form -> ghep thanh "HO VA TEN YYYY"
+    //  4. So sanh (khong phan biet hoa thuong, bo dau tieng Viet) voi ten file
+    //  5. Tim thay -> inject File vao input[type=file] cua DevExtreme
+    //     + dispatch change + de DevExtreme tu upload
+    //  6. Khong tim thay -> toast canh bao
+    //
+    //  Shift+Click vao vung anh = chon lai thu muc
+    // ================================================================
+
+    var _photoMap   = null;   // Map<keyChuan, File>
+    var _photoInput = null;   // <input webkitdirectory> dung de chon thu muc
+
+    /** Chuan hoa: bo dau tieng Viet, thuong hoa, giu chu + so */
+    function _normalizePhotoName(str) {
+        return str
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\u0111/g, 'd')
+            .replace(/[^a-z0-9]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /** Doc Ho va Ten tu form */
+    function _getPatientFullName() {
+        // Chien luoc 1: tim theo class ro rang nhat
+        var selectors = [
+            '.HoVaTen input.dx-texteditor-input',
+            '.HoTen input.dx-texteditor-input',
+            '.TenBenhNhan input.dx-texteditor-input',
+            'input[placeholder*="H\u1ecd v\u00e0 t\u00ean"]',
+            'input[placeholder*="H\u1ecd t\u00ean"]',
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+            var el = document.querySelector(selectors[i]);
+            if (el && el.value.trim()) return el.value.trim();
+        }
+
+        // Chien luoc 2: tim label co chu "Ho va ten" roi lay input ke ben
+        // Form dung label dang <label> hoac span voi text "Ho va ten *"
+        var allLabels = document.querySelectorAll('label, .dx-field-label, .label');
+        for (var li = 0; li < allLabels.length; li++) {
+            var lblTxt = (allLabels[li].textContent || '').replace(/\s+/g, ' ').trim();
+            // Normalize de so sanh: bo dau, thuong hoa
+            var lblNorm = _normalizePhotoName(lblTxt);
+            if (lblNorm.indexOf('ho va ten') === -1) continue;
+            // Tim input gan nhat trong cung row/container
+            var container = allLabels[li].closest('.dx-field, .form-group, tr, .row') || allLabels[li].parentElement;
+            for (var ci = 0; ci < 4 && container; ci++) {
+                var inp = container.querySelector('input.dx-texteditor-input');
+                if (inp && inp.value.trim().length >= 2) return inp.value.trim();
+                container = container.parentElement;
+            }
+        }
+
+        // Chien luoc 3: tim input co gia tri nam giua CMND va NgaySinh
+        // Tren form: [CMND input] [Tim kiem btn] [Ho Ten input] [NgaySinh input]
+        // => lay input text dau tien KHONG co so va co >= 2 tu
+        // Dung querySelectorAll va loc theo DOM order
+        var formInputs = document.querySelectorAll(
+            '.dx-form input.dx-texteditor-input, ' +
+            'dx-form input.dx-texteditor-input, ' +
+            'form input.dx-texteditor-input, ' +
+            '.form-content input.dx-texteditor-input'
+        );
+        // Fallback: tat ca input neu khong tim duoc trong form
+        if (!formInputs.length) formInputs = document.querySelectorAll('dx-text-box input.dx-texteditor-input');
+
+        for (var j = 0; j < formInputs.length; j++) {
+            var v = formInputs[j].value.trim();
+            if (v.length < 3) continue;           // qua ngan
+            if (/\d/.test(v)) continue;           // co so -> SDT/CMND
+            if (/@|\/|\\/.test(v)) continue;      // email/path
+            if (v.indexOf(' ') === -1) continue;  // phai co it nhat 1 khoang trang (ho + ten)
+            return v;
+        }
+        return null;
+    }
+
+    /** Doc nam sinh tu NgaySinh */
+    function _getPatientBirthYear() {
+        var el = document.querySelector('.NgaySinh input[type="hidden"]');
+        if (!el) el = document.querySelector('.NgaySinh dx-date-box input[type="hidden"]');
+        if (el && el.value) {
+            var m = el.value.match(/^(\d{4})/);
+            if (m) return m[1];
+        }
+        var dateInput = document.querySelector('.NgaySinh input.dx-texteditor-input');
+        if (dateInput && dateInput.value) {
+            var parts = dateInput.value.split('/');
+            if (parts.length === 3 && parts[2].length === 4) return parts[2];
+        }
+        return null;
+    }
+
+    /**
+     * Tim input[type=file] tren trang (khong phai _photoInput cua ta).
+     * Uu tien input co accept image hoac thuoc dx-fileuploader.
+     */
+    function _findNativeFileInput() {
+        var all = document.querySelectorAll('input[type="file"]');
+        var candidates = [];
+        for (var i = 0; i < all.length; i++) {
+            if (all[i] === _photoInput) continue;
+            candidates.push(all[i]);
+        }
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+        for (var j = 0; j < candidates.length; j++) {
+            if ((candidates[j].accept || '').toLowerCase().indexOf('image') !== -1) return candidates[j];
+        }
+        return candidates[0];
+    }
+
+    /**
+     * Inject File vao dx-fileuploader:
+     * B1: set .files qua DataTransfer
+     * B2: dispatch 'change' + 'input'
+     * B3: neu DevExtreme van khong phan ung -> thu click programmatic
+     *     de no mo dialog, nhung truoc do da set files => no doc files moi
+     *
+     * Ghi chu: DevExtreme dx-fileuploader bind su kien 'change' tren input
+     * ben trong. Miễn la input.files duoc set truoc khi 'change' bubble len,
+     * no se xu ly dung.
+     */
+    function _injectFileIntoInput(nativeInput, file) {
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+
+            // Xoa files cu truoc (dam bao Angular/DX detect su thay doi)
+            try { nativeInput.files = new DataTransfer().files; } catch(e2) {}
+
+            // Gan file moi
+            nativeInput.files = dt.files;
+
+            // Dispatch theo thu tu DevExtreme mong doi
+            ['input', 'change'].forEach(function(evName) {
+                nativeInput.dispatchEvent(new Event(evName, { bubbles: true, cancelable: true }));
+            });
+
+            // Fallback: neu DX dung Object.defineProperty de intercept .files
+            // thi thu dispatch qua nativeInputValueSetter
+            try {
+                var nativeFileListSetter = Object.getOwnPropertyDescriptor(
+                    HTMLInputElement.prototype, 'files'
+                );
+                if (nativeFileListSetter && nativeFileListSetter.set) {
+                    nativeFileListSetter.set.call(nativeInput, dt.files);
+                    nativeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            } catch(e3) {}
+
+        } catch(e) {
+            showToast('\u26a0\ufe0f L\u1ed7i inject file: ' + e.message);
+        }
+    }
+
+    /**
+     * Tim anh khop voi benh nhan hien tai va upload.
+     * Tra ve true neu thanh cong.
+     */
+    function _tryMatchAndUpload() {
+        var name = _getPatientFullName();
+        var year = _getPatientBirthYear();
+        if (!name) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c H\u1ecd v\u00e0 T\u00ean b\u1ec7nh nh\u00e2n'); return false; }
+        if (!year) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c N\u0103m sinh b\u1ec7nh nh\u00e2n'); return false; }
+
+        var key = _normalizePhotoName(name + ' ' + year);
+        var matched = null;
+
+        // Khop chinh xac
+        _photoMap.forEach(function(file, k) { if (!matched && k === key) matched = file; });
+        // Khop mo (ten file chua key)
+        if (!matched) _photoMap.forEach(function(file, k) { if (!matched && k.indexOf(key) !== -1) matched = file; });
+
+        if (!matched) {
+            var mapKeys = [];
+            _photoMap.forEach(function(f, k) { mapKeys.push(k); });
+            // Hien thi ca raw filename goc de phat hien ky tu an
+            var rawNames = [];
+            _photoMap.forEach(function(f) { rawNames.push(f.name); });
+            showToast('\u274c Key:[' + key + '] Raw:[' + rawNames.join('|') + ']');
+            return false;
+        }
+
+        var nativeInput = _findNativeFileInput();
+        if (!nativeInput) { showToast('\u26a0\ufe0f Kh\u00f4ng t\u00ecm th\u1ea5y \u00f4 upload \u1ea3nh tr\u00ean trang'); return false; }
+
+        _injectFileIntoInput(nativeInput, matched);
+        showToast('\u2705 \u0110\u00e3 ch\u1ecdn \u1ea3nh: ' + matched.name);
+        return true;
+    }
+
+    /** Mo hop thoai chon thu muc, quet file, cap nhat _photoMap */
+    function _pickFolderAndMatch() {
+        // Khong xoa _photoInput cu - chi tao moi neu chua co
+        // (xoa roi tao lai co the khien onchange khong fire tren mot so Chrome)
+        if (!_photoInput || !document.body.contains(_photoInput)) {
+            _photoInput = document.createElement('input');
+            _photoInput.type = 'file';
+            _photoInput.webkitdirectory = true;
+            _photoInput.multiple = true;
+            _photoInput.accept = 'image/jpeg,image/png,image/webp,image/jpg';
+            _photoInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
+            document.body.appendChild(_photoInput);
+        }
+
+        // Reset value de co the chon lai cung thu muc
+        try { _photoInput.value = ''; } catch(e) {}
+
+        _photoInput.onchange = function() {
+            var files = _photoInput.files;
+            if (!files || files.length === 0) return;
+            _photoMap = new Map();
+            var IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+            for (var i = 0; i < files.length; i++) {
+                var f = files[i];
+                if (!IMAGE_EXT.test(f.name)) continue;
+                var key = _normalizePhotoName(f.name.replace(/\.[^.]+$/, ''));
+                _photoMap.set(key, f);
+            }
+            showToast('\ud83d\udcc2 \u0110\u00e3 \u0111\u1ecdc ' + _photoMap.size + ' \u1ea3nh trong th\u01b0 m\u1ee5c');
+            setTimeout(_tryMatchAndUpload, 300);
+        };
+
+        _photoInput.click();
+    }
+
+    /**
+     * Kiem tra node co phai vung upload File anh khong.
+     * Tra ve nativeInput neu dung, null neu khong.
+     */
+    function _getUploadNodeIfMatch(target) {
+        var node = target;
+        for (var depth = 0; depth < 10 && node && node !== document.body; depth++) {
+            // Input file truc tiep (khong phai cua ta)
+            if (node.tagName === 'INPUT' && node.type === 'file' && node !== _photoInput) {
+                return node;
+            }
+            // DevExtreme fileuploader wrapper / button
+            if (node.classList && (
+                node.classList.contains('dx-fileuploader-input-wrapper') ||
+                node.classList.contains('dx-fileuploader-button') ||
+                node.classList.contains('dx-fileuploader-input-label') ||
+                node.classList.contains('dx-fileuploader-content')
+            )) {
+                return _findNativeFileInput();
+            }
+            node = node.parentElement;
+        }
+        return null;
+    }
+
+    function _setupPhotoInterceptor() {
+        // Mot listener duy nhat, xu ly ca click thuong lan Shift+Click
+        // => tranh viec stopImmediatePropagation cua listener truoc chan listener sau
+        document.addEventListener('click', function(e) {
+            if (!document.querySelector('.NgaySinh')) return;
+
+            var nativeInput = _getUploadNodeIfMatch(e.target);
+            if (!nativeInput) return;
+
+            // Chan su kien goc (khong cho DX mo dialog file)
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            if (e.shiftKey) {
+                // Shift+Click -> chon lai thu muc
+                showToast('\ud83d\udcc2 Ch\u1ecdn l\u1ea1i th\u01b0 m\u1ee5c \u1ea3nh...');
+                setTimeout(_pickFolderAndMatch, 150);
+                return;
+            }
+
+            if (!_photoMap) {
+                // Chua co thu muc -> bat buoc chon
+                showToast('\ud83d\udcc2 H\u00e3y ch\u1ecdn TH\u01af M\u1ee4C ch\u1ee9a \u1ea3nh b\u1ec7nh nh\u00e2n...');
+                setTimeout(_pickFolderAndMatch, 150);
+            } else {
+                // Da co thu muc -> tim va up thang
+                _tryMatchAndUpload();
+            }
+        }, true /* capture — chay truoc DevExtreme */);
+    }
+
+    _setupPhotoInterceptor();
+
+    // ================================================================
     //  KHOI DONG
     // ================================================================
     scanAndInject();
@@ -2165,7 +2458,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.12.3';
+        var CURRENT_VERSION = '6.13';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
