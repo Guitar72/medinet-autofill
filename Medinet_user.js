@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.12.2
+// @version      6.12.3
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -183,6 +183,56 @@
     // ================================================================
 
     /**
+     * typeAndEnterSelectBox:
+     * Go text truc tiep vao mainInput cua select-box, doi filter,
+     * roi bam Enter de chon ket qua dau tien.
+     * Dung cho o Xa/Phuong vi dropdown khong co search popup rieng
+     * ma phai go vao chinh input chinh roi Enter.
+     */
+    function typeAndEnterSelectBox(fieldCls, label, cb) {
+        var fieldItem = document.querySelector('.' + fieldCls);
+        if (!fieldItem) { if (cb) cb(); return; }
+        var selectBox = fieldItem.querySelector('dx-select-box');
+        if (!selectBox) { if (cb) cb(); return; }
+
+        var mainInput = selectBox.querySelector('input.dx-texteditor-input');
+        if (!mainInput) { if (cb) cb(); return; }
+
+        // Xoa gia tri cu, focus, roi go text moi
+        mainInput.focus({ preventScroll: true });
+        nativeSetter.call(mainInput, '');
+        mainInput.dispatchEvent(new Event('input', { bubbles: true }));
+        setTimeout(function() {
+            nativeSetter.call(mainInput, label);
+            mainInput.dispatchEvent(new Event('input', { bubbles: true }));
+            mainInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Doi DevExtreme loc danh sach xong roi Enter
+            setTimeout(function() {
+                ['keydown', 'keypress', 'keyup'].forEach(function(evtType) {
+                    mainInput.dispatchEvent(new KeyboardEvent(evtType, {
+                        bubbles: true, cancelable: true,
+                        key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+                    }));
+                });
+                // Fallback: neu Enter khong an, thu click item dau tien trong popup
+                setTimeout(function() {
+                    var firstItem = document.querySelector(
+                        '.dx-dropdowneditor-overlay .dx-list-item[role="option"]:not(.dx-state-invisible),' +
+                        '.dx-popup-wrapper .dx-list-item[role="option"]:not(.dx-state-invisible)'
+                    );
+                    if (firstItem) {
+                        pointerClick(firstItem);
+                        setTimeout(function() { if (cb) cb(); }, 300);
+                    } else {
+                        if (cb) setTimeout(cb, 200);
+                    }
+                }, 200);
+            }, 400);
+        }, 50);
+    }
+
+    /**
      * selectDxSelectBox:
      * Mo dropdown, neu co search input thi go text de loc,
      * sau do chon item dau tien khop voi label.
@@ -234,8 +284,30 @@
                 nativeSetter.call(inp, label);
                 inp.dispatchEvent(new Event('input', { bubbles: true }));
                 inp.dispatchEvent(new Event('change', { bubbles: true }));
-                // Sau khi go, doi Angular/DevExtreme filter xong roi chon
-                setTimeout(function() { pickFirstMatch(label, cb); }, 1000);
+                // Sau khi go, doi Angular/DevExtreme filter xong
+                setTimeout(function() {
+                    // Cach 1 (hieu qua nhat): bam Enter de DevExtreme tu chon
+                    // item dau tien dang highlight trong danh sach da loc
+                    ['keydown', 'keypress', 'keyup'].forEach(function(evtType) {
+                        inp.dispatchEvent(new KeyboardEvent(evtType, {
+                            bubbles: true, cancelable: true,
+                            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+                        }));
+                    });
+                    // Cach 2 (fallback): neu dropdown van con mo (Enter khong
+                    // an dc), thu click truc tiep vao item khop label
+                    setTimeout(function() {
+                        var stillOpen = document.querySelector(
+                            '.dx-dropdowneditor-overlay .dx-list-item[role="option"]:not(.dx-state-invisible),' +
+                            '.dx-popup-wrapper .dx-list-item[role="option"]:not(.dx-state-invisible)'
+                        );
+                        if (stillOpen) {
+                            pickFirstMatch(label, cb);
+                        } else if (cb) {
+                            setTimeout(cb, 200);
+                        }
+                    }, 400);
+                }, 1000);
             }
 
             if (searchInput) {
@@ -295,19 +367,20 @@
 
     function fillThongTinHanhChinh() {
         showToast('\u23f3 \u0110ang \u0111i\u1ec1n Th\u00f4ng tin h\u00e0nh ch\u00ednh...');
-        // B1: Dia diem kham -> "Kham luu dong" (dropdown don gian, khong co search)
-        selectDxSelectBox('DoiTuongKham', 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng', function() {
-            // B2: Xa/Phuong -> "Bac Tan Uyen" (co search input, can go tim kiem)
-            // Them delay de dam bao B1 da dong popup truoc
+        // B1: Xa/Phuong -> "Xa Bac Tan Uyen" (go truc tiep vao input roi Enter,
+        // KHONG dung selectDxSelectBox vi danh sach chua load het)
+        typeAndEnterSelectBox('DiaChiHienTai_XaPhuong', 'X\u00e3 B\u1eafc T\u00e2n Uy\u00ean', function() {
+            // B2: Hinh thuc chi tra -> "Ngan sach thanh pho ho tro"
             setTimeout(function() {
-                selectDxSelectBox('DiaChiHienTai_XaPhuong', 'B\u1eafc T\u00e2n Uy\u00ean', function() {
-                    // B3: Hinh thuc chi tra -> "Ngan sach thanh pho ho tro"
-                    setTimeout(function() {
-                        selectListRadioByLabel('Ng\u00e2n s\u00e1ch th\u00e0nh ph\u1ed1 h\u1ed7 tr\u1ee3');
+                selectListRadioByLabel('Ng\u00e2n s\u00e1ch th\u00e0nh ph\u1ed1 h\u1ed7 tr\u1ee3');
+                // B3: Dia diem kham -> "Kham luu dong"
+                // Them delay de dam bao B2 da hoan tat truoc
+                setTimeout(function() {
+                    selectDxSelectBox('DoiTuongKham', 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng', function() {
                         showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
-                    }, 600);
-                });
-            }, 800);
+                    });
+                }, 300);
+            }, 200);
         });
     }
 
@@ -1382,7 +1455,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.12.2';
+                var CURRENT_VERSION = '6.12.3';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2092,7 +2165,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.12.2';
+        var CURRENT_VERSION = '6.12.3';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
