@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.11
+// @version      6.12
 // @description  Nut Thao Tac Nhanh nam trong header + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -1602,7 +1602,7 @@
                 card.appendChild(contact);
                 // Copyright
                 var copy = document.createElement('div');
-                copy.textContent = 'Copyright \u00a9 Hoang Anh Jupiter';
+                copy.textContent = '\u00a9 Copyright @ Hoang Anh Jupiter';
                 Object.assign(copy.style, {
                     fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px',
                 });
@@ -1939,5 +1939,196 @@
     [200, 600, 1200, 2500].forEach(function(ms) {
         setTimeout(scanAndInject, ms);
     });
+
+    // ================================================================
+    //  TU DONG KIEM TRA CAP NHAT KHI LOAD TRANG
+    // ================================================================
+    (function autoCheckUpdate() {
+        var AUTO_UPDATE_KEY = '_mtt_auto_update';
+        var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
+        var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
+        var CURRENT_VERSION = '6.12';
+
+        try {
+            if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
+        } catch(e) { return; }
+
+        function extractVersion(text) {
+            var m = text.match(/@version\s+([\S]+)/);
+            return m ? m[1] : null;
+        }
+        function versionGt(a, b) {
+            var pa = a.split('.').map(Number);
+            var pb = b.split('.').map(Number);
+            for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+                var na = pa[i] || 0, nb = pb[i] || 0;
+                if (na > nb) return true;
+                if (na < nb) return false;
+            }
+            return false;
+        }
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', META_URL + '?t=' + Date.now(), true);
+        xhr.timeout = 10000;
+        xhr.onload = function() {
+            if (xhr.status !== 200) return;
+            var remoteVer = extractVersion(xhr.responseText);
+            if (!remoteVer || !versionGt(remoteVer, CURRENT_VERSION)) return;
+
+            // ---- POPUP GIUA MAN HINH ----
+            var overlay2 = document.createElement('div');
+            Object.assign(overlay2.style, {
+                position: 'fixed', inset: '0', zIndex: '9999999',
+                background: 'rgba(0,0,0,0.6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'Segoe UI, Arial, sans-serif',
+                backdropFilter: 'blur(5px)',
+            });
+
+            var card2 = document.createElement('div');
+            Object.assign(card2.style, {
+                background: '#fff', borderRadius: '20px',
+                width: '440px', maxWidth: '94vw',
+                boxShadow: '0 30px 70px rgba(0,0,0,0.4)',
+                overflow: 'hidden', position: 'relative',
+                animation: 'mtt_popIn 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+            });
+
+            // inject keyframe
+            if (!document.getElementById('_mtt_anim')) {
+                var st = document.createElement('style');
+                st.id = '_mtt_anim';
+                st.textContent = '@keyframes mtt_popIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}';
+                document.head.appendChild(st);
+            }
+
+            // header
+            var hdr2 = document.createElement('div');
+            Object.assign(hdr2.style, {
+                background: 'linear-gradient(135deg,#0369a1 0%,#0ea5e9 100%)',
+                padding: '24px 28px 20px',
+                display: 'flex', alignItems: 'center', gap: '16px',
+            });
+            hdr2.innerHTML =
+                '<div style="width:52px;height:52px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">\uD83D\uDD04</div>' +
+                '<div>' +
+                  '<div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px">C\u00f3 phi\u00ean b\u1ea3n m\u1edbi!</div>' +
+                  '<div style="font-size:14px;color:rgba(255,255,255,0.85);margin-top:3px">Medinet Script \u2014 phi\u00ean b\u1ea3n <b style=\"background:rgba(255,255,255,0.25);padding:2px 10px;border-radius:20px\">' + remoteVer + '</b> s\u1eb5n s\u00e0ng</div>' +
+                '</div>';
+
+            // close X
+            var closeX = document.createElement('button');
+            closeX.innerHTML = '&times;';
+            Object.assign(closeX.style, {
+                position: 'absolute', top: '14px', right: '16px',
+                background: 'rgba(255,255,255,0.2)', border: 'none',
+                color: '#fff', fontSize: '22px', width: '34px', height: '34px',
+                borderRadius: '50%', cursor: 'pointer', lineHeight: '1',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            });
+            closeX.addEventListener('click', function() { overlay2.remove(); });
+            closeX.addEventListener('mouseenter', function() { closeX.style.background = 'rgba(255,255,255,0.35)'; });
+            closeX.addEventListener('mouseleave', function() { closeX.style.background = 'rgba(255,255,255,0.2)'; });
+
+            // body
+            var body2 = document.createElement('div');
+            Object.assign(body2.style, { padding: '24px 28px 20px' });
+
+            // version compare row
+            var verRow = document.createElement('div');
+            Object.assign(verRow.style, {
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: '12px', marginBottom: '20px',
+                background: '#f8fafc', borderRadius: '12px', padding: '14px',
+                border: '1px solid #e2e8f0',
+            });
+            verRow.innerHTML =
+                '<div style="text-align:center">' +
+                  '<div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Hi\u1ec7n t\u1ea1i</div>' +
+                  '<div style="font-size:20px;font-weight:700;color:#64748b">' + CURRENT_VERSION + '</div>' +
+                '</div>' +
+                '<div style="font-size:24px;color:#0ea5e9">&#8594;</div>' +
+                '<div style="text-align:center">' +
+                  '<div style="font-size:12px;color:#0369a1;margin-bottom:4px">Ph\u00eci\u00ean b\u1ea3n m\u1edbi</div>' +
+                  '<div style="font-size:24px;font-weight:800;color:#0369a1">' + remoteVer + '</div>' +
+                '</div>';
+            body2.appendChild(verRow);
+
+            // step guide (hidden initially)
+            var guideBox = document.createElement('div');
+            Object.assign(guideBox.style, {
+                display: 'none', background: '#f0fdf4',
+                border: '2px solid #86efac', borderRadius: '12px',
+                padding: '16px 18px', marginBottom: '16px',
+            });
+            guideBox.innerHTML =
+                '<div style="font-size:15px;font-weight:700;color:#15803d;margin-bottom:10px">\u2705 URL \u0111\u00e3 copy! Tampermonkey \u0111\u00e3 m\u1edf \u2192</div>' +
+                '<div style="font-size:15px;color:#166534;line-height:2">' +
+                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">1</b>Nh\u1ea5n v\u00e0o \u00f4 tr\u1eafng m\u1ee5c <b>Import from URL</b><br>' +
+                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">2</b>D\u00e1n <b>Ctrl+V</b> v\u00e0o \u00f4 \u0111\u00f3<br>' +
+                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">3</b>Nh\u1ea5n n\u00fat <b>Import</b> r\u1ed3i <b>Install</b>' +
+                '</div>';
+            body2.appendChild(guideBox);
+
+            // install button
+            var installBtn2 = document.createElement('button');
+            installBtn2.innerHTML = '\u2B07\uFE0F &nbsp;C\u00e0i \u0111\u1eb7t phi\u00ean b\u1ea3n m\u1edbi';
+            Object.assign(installBtn2.style, {
+                display: 'block', width: '100%', padding: '15px',
+                background: 'linear-gradient(135deg,#16a34a,#15803d)',
+                color: '#fff', border: 'none', borderRadius: '12px',
+                fontSize: '17px', fontWeight: '800', cursor: 'pointer',
+                marginBottom: '10px', letterSpacing: '0.2px',
+                boxShadow: '0 4px 14px rgba(22,163,74,0.4)',
+                transition: 'transform 0.1s, filter 0.1s',
+            });
+            installBtn2.addEventListener('mouseenter', function() { installBtn2.style.filter = 'brightness(1.08)'; installBtn2.style.transform = 'translateY(-2px)'; });
+            installBtn2.addEventListener('mouseleave', function() { installBtn2.style.filter = ''; installBtn2.style.transform = ''; });
+            installBtn2.addEventListener('click', function() {
+                try { GM_setClipboard(RAW_URL); } catch(e) {
+                    try {
+                        var ta = document.createElement('textarea');
+                        ta.value = RAW_URL; document.body.appendChild(ta);
+                        ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                    } catch(e2) {}
+                }
+                var knownIds = [
+                    'dhdgffkkebhmkfjojejmpbldmpobfkfo',
+                    'gcalenpjmijncebpfijmoaglllgpjagf',
+                    'lcmhiflmkkekcbknnhgpnodjfldoecnf',
+                ];
+                for (var i = 0; i < knownIds.length; i++) {
+                    try { window.open('chrome-extension://' + knownIds[i] + '/options.html#nav=utils', '_blank'); break; } catch(e) {}
+                }
+                installBtn2.style.display = 'none';
+                guideBox.style.display = 'block';
+            });
+            body2.appendChild(installBtn2);
+
+            // dismiss button
+            var dismiss2 = document.createElement('button');
+            dismiss2.textContent = 'B\u1ecf qua, nh\u1eafc l\u1ea7n sau';
+            Object.assign(dismiss2.style, {
+                display: 'block', width: '100%', padding: '11px',
+                background: 'none', color: '#94a3b8',
+                border: '1px solid #e2e8f0', borderRadius: '12px',
+                fontSize: '14px', cursor: 'pointer',
+                transition: 'color 0.15s, border-color 0.15s',
+            });
+            dismiss2.addEventListener('mouseenter', function() { dismiss2.style.color = '#64748b'; dismiss2.style.borderColor = '#cbd5e1'; });
+            dismiss2.addEventListener('mouseleave', function() { dismiss2.style.color = '#94a3b8'; dismiss2.style.borderColor = '#e2e8f0'; });
+            dismiss2.addEventListener('click', function() { overlay2.remove(); });
+            body2.appendChild(dismiss2);
+
+            card2.appendChild(hdr2);
+            card2.appendChild(closeX);
+            card2.appendChild(body2);
+            overlay2.appendChild(card2);
+            overlay2.addEventListener('click', function(e) { if (e.target === overlay2) overlay2.remove(); });
+            document.body.appendChild(overlay2);
+        };
+        xhr.send();
+    })();
 
 })();
