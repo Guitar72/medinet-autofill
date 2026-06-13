@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.13
-// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Phan loai nhom NCT (41-60, 61-70, 71-80, 81+) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
+// @version      6.14
+// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
@@ -495,7 +495,7 @@
             }
             var item = list[idx++];
             selectNCTRadio(item.code, item.opt);
-            setTimeout(next, 50);
+            setTimeout(next, 30);
         }
         next();
     }
@@ -632,7 +632,7 @@
         return 4;
     }
 
-    function openSubmenu(parentItem, subItems) {
+    function openSubmenu(parentItem, subItems, noAgeLogic) {
         closeSubmenu();
         var sm = document.createElement('div');
         sm.id = SUBMENU_ID;
@@ -657,13 +657,13 @@
 
         subItems.forEach(function(sub, i) {
             var btn = document.createElement('button');
-            btn.textContent = sub.label;
+            btn.innerHTML = (sub.emoji ? '<span style="margin-right:6px">' + sub.emoji + '</span>' : '') + sub.label;
 
             // Xac dinh sang/mo:
             // - Nhom tuoi (i < AGE_ITEM_COUNT): sang neu dung nhom, mo neu sai nhom
             //   (neu khong doc duoc tuoi thi tat ca deu sang binh thuong)
             // - THA&DTD (i >= AGE_ITEM_COUNT): luon sang
-            var dimmed = (i < AGE_ITEM_COUNT) && (ageIdx !== null) && (i !== ageIdx);
+            var dimmed = !noAgeLogic && (i < AGE_ITEM_COUNT) && (ageIdx !== null) && (i !== ageIdx);
 
             Object.assign(btn.style, {
                 display: 'block',
@@ -700,16 +700,22 @@
 
         document.body.appendChild(sm);
 
-        // Vi tri: ben phai cua parentItem
+        // Vi tri: luon hien BEN PHAI menu chinh, chi sang trai neu khong du cho
         var rect = parentItem.getBoundingClientRect();
-        var smW = 220;
+        var smW  = sm.offsetWidth || 240;
+        var smH  = sm.offsetHeight || 200;
         var top  = rect.top;
-        var left = rect.right + 6;
-        if (left + smW > window.innerWidth - 8) left = rect.left - smW - 6;
-        if (top + sm.offsetHeight > window.innerHeight - 8) top = window.innerHeight - sm.offsetHeight - 8;
+        var mainMenu = document.getElementById('_mtt_menu');
+        var mainRect = mainMenu ? mainMenu.getBoundingClientRect() : rect;
+        var leftCandidate = mainRect.right + 6;
+        if (leftCandidate + smW > window.innerWidth - 4) {
+            leftCandidate = mainRect.left - smW - 6;
+        }
+        if (leftCandidate < 4) leftCandidate = 4;
+        if (top + smH > window.innerHeight - 8) top = window.innerHeight - smH - 8;
         if (top < 4) top = 4;
         sm.style.top  = top  + 'px';
-        sm.style.left = left + 'px';
+        sm.style.left = leftCandidate + 'px';
     }
 
     // Dong submenu khi click ngoai
@@ -740,7 +746,35 @@
             }
         },
         {
-            emoji: '\ud83d\udcc2', label: 'Ph\u00e2n lo\u1ea1i theo nh\u00f3m',
+            emoji: '\ud83d\udccb', label: 'Ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3',
+            color: '#7b3f00', hoverColor: '#5c2d00',
+            // Kha dung khi co cac dong B1, B1.1 ... B1.7 tren trang
+            check: function() {
+                var rows = document.querySelectorAll('tr[role="row"]');
+                for (var i = 0; i < rows.length; i++) {
+                    var cell = rows[i].querySelector('td[aria-colindex="1"]');
+                    if (cell && cell.textContent.trim() === 'B1') return true;
+                }
+                return false;
+            },
+            fn: function() {
+                var list = [
+                    { code: 'B1',    opt: 'Kh\u00f4ng' },
+                    { code: 'B1.1',  opt: 'Kh\u00f4ng' },
+                    { code: 'B1.2',  opt: 'Kh\u00f4ng' },
+                    { code: 'B1.3',  opt: 'Kh\u00f4ng' },
+                    { code: 'B1.4',  opt: 'Kh\u00f4ng' },
+                    { code: 'B1.5',  opt: 'Kh\u00f4ng' },
+                    { code: 'B1.6',  opt: 'Kh\u00f4ng' },
+                    { code: 'B1.7',  opt: 'Kh\u00f4ng' },
+                ];
+                showToast('\u23f3 \u0110ang \u0111i\u1ec1n ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3...');
+                selectNCTRadioBulk(list, function() {
+                    showToast('\ud83d\udccc \u0110\u00e3 \u0111i\u1ec1n xong: Ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3');
+                });
+            }
+        },        {
+            emoji: '\ud83d\udcc2', label: 'H\u1ecfi b\u1ec7nh v\u00e0 kh\u00e1m l\u00e2m s\u00e0ng',
             color: '#1565c0', hoverColor: '#0d47a1',
             hasFlyout: true,
             // Kha dung khi co it nhat 1 radio tren trang
@@ -1273,170 +1307,197 @@
             fn: function() { /* handled by flyout */ }
         },
         {
-            emoji: '\ud83d\udccb', label: 'Ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3',
-            color: '#7b3f00', hoverColor: '#5c2d00',
-            // Kha dung khi co cac dong B1, B1.1 ... B1.7 tren trang
+            emoji: '\ud83c\udfe5', label: 'Th\u00f4ng tin kh\u00e1m NCT',
+            color: '#1565c0', hoverColor: '#0d47a1',
             check: function() {
-                var rows = document.querySelectorAll('tr[role="row"]');
-                for (var i = 0; i < rows.length; i++) {
-                    var cell = rows[i].querySelector('td[aria-colindex="1"]');
-                    if (cell && cell.textContent.trim() === 'B1') return true;
-                }
-                return false;
-            },
-            fn: function() {
-                var list = [
-                    { code: 'B1',    opt: 'Kh\u00f4ng' },
-                    { code: 'B1.1',  opt: 'Kh\u00f4ng' },
-                    { code: 'B1.2',  opt: 'Kh\u00f4ng' },
-                    { code: 'B1.3',  opt: 'Kh\u00f4ng' },
-                    { code: 'B1.4',  opt: 'Kh\u00f4ng' },
-                    { code: 'B1.5',  opt: 'Kh\u00f4ng' },
-                    { code: 'B1.6',  opt: 'Kh\u00f4ng' },
-                    { code: 'B1.7',  opt: 'Kh\u00f4ng' },
-                ];
-                showToast('\u23f3 \u0110ang \u0111i\u1ec1n ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3...');
-                selectNCTRadioBulk(list, function() {
-                    showToast('\ud83d\udccc \u0110\u00e3 \u0111i\u1ec1n xong: Ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3');
-                });
-            }
-        },
-        {
-            emoji: '\ud83c\udfe5', label: 'T\u00edch "Ch\u01b0a b\u1ea5t th\u01b0\u1eddng" + Lo\u1ea1i I',
-            color: '#2e7d32', hoverColor: '#1b5e20',
-            // Kha dung khi co radio "Loai I" VA co chu "Chua phat hien bat thuong"
-            check: function() {
-                var hasLoaiI = false;
-                document.querySelectorAll('.dx-item.dx-list-item[role="option"]').forEach(function(item) {
-                    if (hasLoaiI) return;
-                    var lbl = item.querySelector('.dx-item-content.dx-list-item-content');
-                    if (lbl && lbl.textContent.trim() === 'Lo\u1ea1i I') hasLoaiI = true;
-                });
-                var hasCBT = false;
-                document.querySelectorAll('b').forEach(function(b) {
-                    if (b.textContent.includes('Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng')) hasCBT = true;
-                });
-                return hasLoaiI && hasCBT;
-            },
-            fn: function() {
-                resetAll();
-                setTimeout(function() {
-                    tickAllChuaPhatHien([]);
-                    selectRadioWithException('__none__', 'Lo\u1ea1i I', 'Lo\u1ea1i I');
-                    setNumberField('Mat_KhongKinh_MP', '10');
-                    setNumberField('Mat_KhongKinh_MT', '10');
-                    fillCommonNumbers();
-                    showToast('\ud83c\udfe5 \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I + Kh\u00f4ng k\u00ednh + Th\u00ednh l\u1ef1c');
-                }, 400);
-            }
-        },
-        {
-            emoji: '\u2764\ufe0f', label: 'B\u1ec7nh n\u1ec1n THA+\u0110T\u0110+BTTMCB',
-            color: '#c62828', hoverColor: '#8e0000',
-            // Kha dung khi co truong NoiKhoa_PhanLoai va NoiKhoa_ChanDoanXacDinh_ICD
-            check: function() {
-                return !!document.querySelector('.NoiKhoa_PhanLoai') &&
-                       !!document.querySelector('.NoiKhoa_ChanDoanXacDinh_ICD');
-            },
-            fn: function() {
-                // Buoc 1: thuc hien giong "Tich chua bat thuong + Loai I"
-                resetAll();
-                setTimeout(function() {
-                    tickAllChuaPhatHien([]);
-                    setNumberField('Mat_KhongKinh_MP', '10');
-                    setNumberField('Mat_KhongKinh_MT', '10');
-                    fillCommonNumbers();
-
-                    // Buoc 2: rieng NoiKhoa -> bo tick "Chua phat hien bat thuong", chon Loai II
-                    var noiKhoaCb = document.querySelector('.NoiKhoa_ChuaPhatHienBatThuong dx-check-box[role="checkbox"]');
-                    if (noiKhoaCb) untickCheckbox(noiKhoaCb);
-
-                    // Chon Loai I cho tat ca ngoai NoiKhoa, chon Loai II cho NoiKhoa
-                    selectRadioWithException('NoiKhoa_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-
-                    // Buoc 3: dien 3 ma ICD vao NoiKhoa_ChanDoanXacDinh_ICD lan luot
-                    var icdCodes = ['I10', 'I25.5', 'E11.9'];
-                    var icdDelay = 1500;
-                    icdCodes.forEach(function(code, idx) {
-                        setTimeout(function() {
-                            fillTagBox('NoiKhoa_ChanDoanXacDinh_ICD', code);
-                        }, icdDelay * (idx + 1));
-                    });
-
-                    showToast('\u2764\ufe0f THA+\u0110T\u0110+BTTMCB: \u0111ang \u0111i\u1ec1n ICD...');
-                }, 400);
-            }
-        },
-        {
-            emoji: '\ud83d\udc53', label: 'C\u00f3 k\u00ednh + ICD H52',
-            color: '#6a1b9a', hoverColor: '#4a148c',
-            // Kha dung khi co truong phan loai mat va truong co kinh
-            check: function() {
-                return !!document.querySelector('.Mat_PhanLoai') &&
-                       !!document.querySelector('.Mat_CoKinh_MP');
-            },
-            fn: function() {
-                resetAll();
-                setTimeout(function() {
-                    tickAllChuaPhatHien(['Mat_ChuaPhatHienBatThuong']);
-                    selectRadioWithException('Mat_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-                    setNumberField('Mat_CoKinh_MP', '10');
-                    setNumberField('Mat_CoKinh_MT', '10');
-                    fillCommonNumbers();
-                    showICDPopup(function(icdCode) {
-                        setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', icdCode); }, 300);
-                        showToast('\ud83d\udc53 Lo\u1ea1i II (M\u1eaft) + C\u00f3 k\u00ednh + ICD: ' + icdCode);
-                    });
-                }, 400);
-            }
-        },
-        {
-            emoji: '\ud83e\uddb7', label: 'RHM: Lo\u1ea1i II + K08.1',
-            color: '#bf360c', hoverColor: '#8d1a00',
-            // Kha dung khi co truong RHM_PhanLoai va tag box ICD cua RHM
-            check: function() {
-                return !!document.querySelector('.RHM_PhanLoai') &&
-                       !!document.querySelector('.RHM_ChanDoanXacDinh_ICD');
-            },
-            fn: function() {
-                resetAll();
-                setTimeout(function() {
-                    tickAllChuaPhatHien(['RHM_ChuaPhatHienBatThuong']);
-                    selectRadioWithException('RHM_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-                    setNumberField('Mat_KhongKinh_MP', '10');
-                    setNumberField('Mat_KhongKinh_MT', '10');
-                    fillCommonNumbers();
-                    setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, 300);
-                    showToast('\ud83e\uddb7 Lo\u1ea1i II (RHM) + K08.1 + Kh\u00f4ng k\u00ednh + Th\u00ednh l\u1ef1c');
-                }, 400);
-            }
-        },
-        {
-            emoji: '\ud83d\udc53\ud83e\uddb7', label: 'C\u00f3 k\u00ednh + RHM: Lo\u1ea1i II + ICD',
-            color: '#00695c', hoverColor: '#004d40',
-            // Kha dung khi co ca phan loai mat + co kinh + phan loai RHM
-            check: function() {
-                return !!document.querySelector('.Mat_PhanLoai') &&
-                       !!document.querySelector('.Mat_CoKinh_MP') &&
+                return !!document.querySelector('.NoiKhoa_PhanLoai') ||
+                       !!document.querySelector('.Mat_PhanLoai') ||
                        !!document.querySelector('.RHM_PhanLoai');
             },
             fn: function() {
                 resetAll();
                 setTimeout(function() {
-                    tickAllChuaPhatHien(['Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong']);
-                    selectRadioMultiException(['Mat_PhanLoai', 'RHM_PhanLoai'], 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-                    setNumberField('Mat_CoKinh_MP', '10');
-                    setNumberField('Mat_CoKinh_MT', '10');
-                    fillCommonNumbers();
-                    setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, 300);
-                    showICDPopup(function(icdCode) {
-                        setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', icdCode); }, 300);
-                        showToast('\ud83d\udc53\ud83e\uddb7 Lo\u1ea1i II (M\u1eaft+RHM) + C\u00f3 k\u00ednh + K08.1 + ICD: ' + icdCode);
+                    // Tick "Chua phat hien" cho tat ca NGOAI Noi Khoa, Mat, RHM
+                    tickAllChuaPhatHien(['NoiKhoa_ChuaPhatHienBatThuong', 'Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong']);
+
+                    // Bo tick "Chua phat hien" cho Noi Khoa, Mat, RHM (vi chon Loai III)
+                    ['NoiKhoa_ChuaPhatHienBatThuong', 'Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong'].forEach(function(cls) {
+                        var cb = document.querySelector('.' + cls + ' dx-check-box[role="checkbox"]');
+                        if (cb) untickCheckbox(cb);
                     });
+
+                    // Chon Loai III cho Noi Khoa, Mat, RHM; Loai I cho tat ca con lai
+                    selectRadioMultiException(['NoiKhoa_PhanLoai', 'Mat_PhanLoai', 'RHM_PhanLoai'], 'Lo\u1ea1i III', 'Lo\u1ea1i I');
+
+                    fillCommonNumbers();
+
+                    // ICD Noi Khoa: I10, I25.5, E11 (lan luot, moi code cach 1.5s)
+                    ['I10', 'I25.5', 'E11.9'].forEach(function(code, idx) {
+                        setTimeout(function() {
+                            fillTagBox('NoiKhoa_ChanDoanXacDinh_ICD', code);
+                        }, 1500 * (idx + 1));
+                    });
+
+                    // ICD Mat: H25.0
+                    setTimeout(function() {
+                        fillTagBox('Mat_ChanDoanXacDinh_ICD', 'H25.0');
+                    }, 1500 * 4);
+
+                    // ICD RHM: K08.1
+                    setTimeout(function() {
+                        fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1');
+                        showToast('\ud83c\udfe5 Th\u00f4ng tin kh\u00e1m NCT \u0111\u00e3 \u0111i\u1ec1n xong!');
+                    }, 1500 * 5);
                 }, 400);
             }
         },
+
         {
+            emoji: '\ud83d\udcc1', label: 'KSK Vi\u1ec7c l\u00e0m + L\u00e1i xe',
+            color: '#2e7d32', hoverColor: '#1b5e20',
+            hasFlyout: true,
+            noAgeLogic: true,
+            check: function() { return true; },
+            flyoutItems: [
+                    {
+                        emoji: '\ud83c\udfe5', label: 'T\u00edch "Ch\u01b0a b\u1ea5t th\u01b0\u1eddng" + Lo\u1ea1i I',
+                        color: '#2e7d32', hoverColor: '#1b5e20',
+                        // Kha dung khi co radio "Loai I" VA co chu "Chua phat hien bat thuong"
+                        check: function() {
+                            var hasLoaiI = false;
+                            document.querySelectorAll('.dx-item.dx-list-item[role="option"]').forEach(function(item) {
+                                if (hasLoaiI) return;
+                                var lbl = item.querySelector('.dx-item-content.dx-list-item-content');
+                                if (lbl && lbl.textContent.trim() === 'Lo\u1ea1i I') hasLoaiI = true;
+                            });
+                            var hasCBT = false;
+                            document.querySelectorAll('b').forEach(function(b) {
+                                if (b.textContent.includes('Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng')) hasCBT = true;
+                            });
+                            return hasLoaiI && hasCBT;
+                        },
+                        fn: function() {
+                            resetAll();
+                            setTimeout(function() {
+                                tickAllChuaPhatHien([]);
+                                selectRadioWithException('__none__', 'Lo\u1ea1i I', 'Lo\u1ea1i I');
+                                setNumberField('Mat_KhongKinh_MP', '10');
+                                setNumberField('Mat_KhongKinh_MT', '10');
+                                fillCommonNumbers();
+                                showToast('\ud83c\udfe5 \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I + Kh\u00f4ng k\u00ednh + Th\u00ednh l\u1ef1c');
+                            }, 400);
+                        }
+                    },
+                    {
+                        emoji: '\u2764\ufe0f', label: 'B\u1ec7nh n\u1ec1n THA+\u0110T\u0110+BTTMCB',
+                        color: '#c62828', hoverColor: '#8e0000',
+                        // Kha dung khi co truong NoiKhoa_PhanLoai va NoiKhoa_ChanDoanXacDinh_ICD
+                        check: function() {
+                            return !!document.querySelector('.NoiKhoa_PhanLoai') &&
+                                   !!document.querySelector('.NoiKhoa_ChanDoanXacDinh_ICD');
+                        },
+                        fn: function() {
+                            // Buoc 1: thuc hien giong "Tich chua bat thuong + Loai I"
+                            resetAll();
+                            setTimeout(function() {
+                                tickAllChuaPhatHien([]);
+                                setNumberField('Mat_KhongKinh_MP', '10');
+                                setNumberField('Mat_KhongKinh_MT', '10');
+                                fillCommonNumbers();
+
+                                // Buoc 2: rieng NoiKhoa -> bo tick "Chua phat hien bat thuong", chon Loai II
+                                var noiKhoaCb = document.querySelector('.NoiKhoa_ChuaPhatHienBatThuong dx-check-box[role="checkbox"]');
+                                if (noiKhoaCb) untickCheckbox(noiKhoaCb);
+
+                                // Chon Loai I cho tat ca ngoai NoiKhoa, chon Loai II cho NoiKhoa
+                                selectRadioWithException('NoiKhoa_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
+
+                                // Buoc 3: dien 3 ma ICD vao NoiKhoa_ChanDoanXacDinh_ICD lan luot
+                                var icdCodes = ['I10', 'I25.5', 'E11.9'];
+                                var icdDelay = 1500;
+                                icdCodes.forEach(function(code, idx) {
+                                    setTimeout(function() {
+                                        fillTagBox('NoiKhoa_ChanDoanXacDinh_ICD', code);
+                                    }, icdDelay * (idx + 1));
+                                });
+
+                                showToast('\u2764\ufe0f THA+\u0110T\u0110+BTTMCB: \u0111ang \u0111i\u1ec1n ICD...');
+                            }, 400);
+                        }
+                    },
+                    {
+                        emoji: '\ud83d\udc53', label: 'C\u00f3 k\u00ednh + ICD H52',
+                        color: '#6a1b9a', hoverColor: '#4a148c',
+                        // Kha dung khi co truong phan loai mat va truong co kinh
+                        check: function() {
+                            return !!document.querySelector('.Mat_PhanLoai') &&
+                                   !!document.querySelector('.Mat_CoKinh_MP');
+                        },
+                        fn: function() {
+                            resetAll();
+                            setTimeout(function() {
+                                tickAllChuaPhatHien(['Mat_ChuaPhatHienBatThuong']);
+                                selectRadioWithException('Mat_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
+                                setNumberField('Mat_CoKinh_MP', '10');
+                                setNumberField('Mat_CoKinh_MT', '10');
+                                fillCommonNumbers();
+                                showICDPopup(function(icdCode) {
+                                    setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', icdCode); }, 300);
+                                    showToast('\ud83d\udc53 Lo\u1ea1i II (M\u1eaft) + C\u00f3 k\u00ednh + ICD: ' + icdCode);
+                                });
+                            }, 400);
+                        }
+                    },
+                    {
+                        emoji: '\ud83e\uddb7', label: 'RHM: Lo\u1ea1i II + K08.1',
+                        color: '#bf360c', hoverColor: '#8d1a00',
+                        // Kha dung khi co truong RHM_PhanLoai va tag box ICD cua RHM
+                        check: function() {
+                            return !!document.querySelector('.RHM_PhanLoai') &&
+                                   !!document.querySelector('.RHM_ChanDoanXacDinh_ICD');
+                        },
+                        fn: function() {
+                            resetAll();
+                            setTimeout(function() {
+                                tickAllChuaPhatHien(['RHM_ChuaPhatHienBatThuong']);
+                                selectRadioWithException('RHM_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
+                                setNumberField('Mat_KhongKinh_MP', '10');
+                                setNumberField('Mat_KhongKinh_MT', '10');
+                                fillCommonNumbers();
+                                setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, 300);
+                                showToast('\ud83e\uddb7 Lo\u1ea1i II (RHM) + K08.1 + Kh\u00f4ng k\u00ednh + Th\u00ednh l\u1ef1c');
+                            }, 400);
+                        }
+                    },
+                    {
+                        emoji: '\ud83d\udc53\ud83e\uddb7', label: 'C\u00f3 k\u00ednh + RHM: Lo\u1ea1i II + ICD',
+                        color: '#00695c', hoverColor: '#004d40',
+                        // Kha dung khi co ca phan loai mat + co kinh + phan loai RHM
+                        check: function() {
+                            return !!document.querySelector('.Mat_PhanLoai') &&
+                                   !!document.querySelector('.Mat_CoKinh_MP') &&
+                                   !!document.querySelector('.RHM_PhanLoai');
+                        },
+                        fn: function() {
+                            resetAll();
+                            setTimeout(function() {
+                                tickAllChuaPhatHien(['Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong']);
+                                selectRadioMultiException(['Mat_PhanLoai', 'RHM_PhanLoai'], 'Lo\u1ea1i II', 'Lo\u1ea1i I');
+                                setNumberField('Mat_CoKinh_MP', '10');
+                                setNumberField('Mat_CoKinh_MT', '10');
+                                fillCommonNumbers();
+                                setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, 300);
+                                showICDPopup(function(icdCode) {
+                                    setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', icdCode); }, 300);
+                                    showToast('\ud83d\udc53\ud83e\uddb7 Lo\u1ea1i II (M\u1eaft+RHM) + C\u00f3 k\u00ednh + K08.1 + ICD: ' + icdCode);
+                                });
+                            }, 400);
+                        }
+                    }
+            ],
+            fn: function() { /* handled by flyout */ }
+        },
+                {
             emoji: '\ud83d\udd04', label: 'C\u1eadp nh\u1eadt phi\u00ean b\u1ea3n',
             color: '#0369a1', hoverColor: '#075985',
             check: function() { return true; },
@@ -1453,7 +1514,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.13';
+                var CURRENT_VERSION = '6.19';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -1901,7 +1962,7 @@
                     // Toggle submenu
                     var existing = document.getElementById(SUBMENU_ID);
                     if (existing) { closeSubmenu(); return; }
-                    openSubmenu(item, action.flyoutItems);
+                    openSubmenu(item, action.flyoutItems, action.noAgeLogic);
                     return;
                 }
                 menu.style.display = 'none';
@@ -2458,7 +2519,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.13';
+        var CURRENT_VERSION = '6.19';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
@@ -2641,5 +2702,66 @@
         };
         xhr.send();
     })();
+
+    // ================================================================
+    //  OBSERVER: Loai I <-> Chua phat hien bat thuong (2 chieu)
+    //  - Khi user chon Loai I   -> tu dong tick   "Chua phat hien"
+    //  - Khi user chon Loai II+ -> tu dong untick "Chua phat hien"
+    //  - (Chi xu ly khi user tu click, khong anh huong den auto-fill)
+    //
+    //  Map: class container PhanLoai -> class container ChuaPhatHien
+    // ================================================================
+    (function() {
+        var PHAN_LOAI_MAP = {
+            'NoiKhoa_PhanLoai': 'NoiKhoa_ChuaPhatHienBatThuong',
+            'Mat_PhanLoai':     'Mat_ChuaPhatHienBatThuong',
+            'RHM_PhanLoai':     'RHM_ChuaPhatHienBatThuong',
+            'TMH_PhanLoai':     'TMH_ChuaPhatHienBatThuong',
+            'ThanKinh_PhanLoai':'ThanKinh_ChuaPhatHienBatThuong',
+            'TamThan_PhanLoai': 'TamThan_ChuaPhatHienBatThuong',
+        };
+
+        function getSelectedLabel(plContainer) {
+            var checked = plContainer.querySelector('.dx-item.dx-list-item[role="option"] .dx-list-select-radiobutton[aria-checked="true"]');
+            if (!checked) return null;
+            var item = checked.closest('.dx-item.dx-list-item[role="option"]');
+            if (!item) return null;
+            var lbl = item.querySelector('.dx-item-content.dx-list-item-content');
+            return lbl ? (lbl.textContent || '').trim() : null;
+        }
+
+        function syncChuaPhatHien(plCls, cbtCls) {
+            var plEl  = document.querySelector('.' + plCls);
+            var cbtEl = document.querySelector('.' + cbtCls);
+            if (!plEl || !cbtEl) return;
+            var label = getSelectedLabel(plEl);
+            if (!label) return;
+            var cb = cbtEl.querySelector('dx-check-box[role="checkbox"]');
+            if (!cb) return;
+            if (label === 'Lo\u1ea1i I') {
+                tickCheckbox(cb);
+            } else if (/Lo\u1ea1i (II|III|IV|V)/.test(label)) {
+                untickCheckbox(cb);
+            }
+        }
+
+        var obs = new MutationObserver(function() {
+            Object.keys(PHAN_LOAI_MAP).forEach(function(plCls) {
+                syncChuaPhatHien(plCls, PHAN_LOAI_MAP[plCls]);
+            });
+        });
+
+        function startObserver() {
+            obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-checked'] });
+        }
+
+        // Start immediately and re-attach after Angular re-renders
+        if (document.body) {
+            startObserver();
+        } else {
+            document.addEventListener('DOMContentLoaded', startObserver);
+        }
+    })();
+
 
 })();
