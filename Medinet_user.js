@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.14
+// @version      6.14.2
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
+// @grant        GM_openInTab
 // @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.js
 // ==/UserScript==
@@ -777,10 +778,14 @@
             emoji: '\ud83d\udcc2', label: 'H\u1ecfi b\u1ec7nh v\u00e0 kh\u00e1m l\u00e2m s\u00e0ng',
             color: '#1565c0', hoverColor: '#0d47a1',
             hasFlyout: true,
-            // Kha dung khi co it nhat 1 radio tren trang
+            // Kha dung khi co row D1 (trang Hoi benh va kham lam sang)
             check: function() {
-                return document.querySelectorAll('dx-radio-group').length > 0 ||
-                       document.querySelectorAll('.dx-item.dx-list-item[role="option"]').length > 0;
+                var rows = document.querySelectorAll('tr[role="row"]');
+                for (var i = 0; i < rows.length; i++) {
+                    var cell = rows[i].querySelector('td[aria-colindex="1"]');
+                    if (cell && cell.textContent.trim() === 'D1') return true;
+                }
+                return false;
             },
             flyoutItems: [
                 {
@@ -1357,7 +1362,11 @@
             color: '#2e7d32', hoverColor: '#1b5e20',
             hasFlyout: true,
             noAgeLogic: true,
-            check: function() { return true; },
+            check: function() {
+                return !!document.querySelector('.NoiKhoa_PhanLoai') ||
+                       !!document.querySelector('.Mat_PhanLoai') ||
+                       !!document.querySelector('.RHM_PhanLoai');
+            },
             flyoutItems: [
                     {
                         emoji: '\ud83c\udfe5', label: 'T\u00edch "Ch\u01b0a b\u1ea5t th\u01b0\u1eddng" + Lo\u1ea1i I',
@@ -1514,7 +1523,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.14';
+                var CURRENT_VERSION = '6.14.2';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -1668,43 +1677,66 @@
                 installBtn.addEventListener('mouseenter', function() { installBtn.style.filter = 'brightness(1.1)'; installBtn.style.transform = 'translateY(-1px)'; });
                 installBtn.addEventListener('mouseleave', function() { installBtn.style.filter = ''; installBtn.style.transform = 'translateY(0)'; });
                 installBtn.addEventListener('click', function() {
-                    // Copy URL vào clipboard
-                    try { GM_setClipboard(RAW_URL); } catch(e) {
+                    // Copy URL vao clipboard
+                    var copied = false;
+                    try { GM_setClipboard(RAW_URL); copied = true; } catch(e) {
                         try {
                             var ta = document.createElement('textarea');
                             ta.value = RAW_URL; document.body.appendChild(ta);
                             ta.select(); document.execCommand('copy');
                             document.body.removeChild(ta);
+                            copied = true;
                         } catch(e2) {}
                     }
-                    // Mở Tampermonkey Utilities tab
-                    var tmId = null;
-                    var knownIds = [
-                        'dhdgffkkebhmkfjojejmpbldmpobfkfo', // Chrome stable
-                        'gcalenpjmijncebpfijmoaglllgpjagf', // Chrome beta
-                        'lcmhiflmkkekcbknnhgpnodjfldoecnf', // Edge
-                    ];
-                    for (var i = 0; i < knownIds.length; i++) {
-                        try {
-                            var url = 'chrome-extension://' + knownIds[i] + '/options.html#nav=utils';
-                            window.open(url, '_blank');
-                            tmId = knownIds[i]; break;
-                        } catch(e) {}
-                    }
-                    // Hiện hướng dẫn ngay trong popup
+                    // Chrome chan window.open chrome-extension://, huong dan thu cong
                     installBtn.style.display = 'none';
                     var guide = document.createElement('div');
                     Object.assign(guide.style, {
                         background: '#fffbeb', border: '2px solid #fbbf24',
                         borderRadius: '10px', padding: '14px 16px',
-                        marginBottom: '10px', fontSize: '15px',
-                        color: '#92400e', lineHeight: '1.8',
+                        marginBottom: '10px', fontSize: '14px',
+                        color: '#92400e', lineHeight: '2.0', textAlign: 'left',
                     });
                     guide.innerHTML =
-                        '<b style="font-size:16px">\u2705 \u0110\u00e3 copy URL v\u00e0 m\u1edf Tampermonkey!</b><br>' +
-                        '1\ufe0f\u20e3 Trong tab vừa mở → mục <b>Import from URL</b><br>' +
-                        '2\ufe0f\u20e3 Nhấn vào ô trắng → <b>Ctrl+V</b> để dán<br>' +
-                        '3\ufe0f\u20e3 Nhấn nút <b>Import</b> → <b>Install</b> là xong!';
+                        '<b style="font-size:15px">' + (copied ? '\u2705 \u0110\u00e3 copy URL!' : '\ud83d\udccb Sao ch\u00e9p URL b\u00ean d\u01b0\u1edbi') + '</b><br>' +
+                        '1\ufe0f\u20e3 M\u1edf trang Tampermonkey b\u00ean d\u01b0\u1edbi<br>' +
+                        '2\ufe0f\u20e3 M\u1ee5c <b>Import t\u1eeb URL</b> \u2192 d\u00e1n URL \u2192 <b>Import</b><br>' +
+                        '3\ufe0f\u20e3 Nh\u1ea5n <b>C\u00e0i \u0111\u1eb7t</b> \u2192 xong!';
+                    var urlBox = document.createElement('div');
+                    Object.assign(urlBox.style, {
+                        marginTop: '8px', padding: '8px 10px',
+                        background: '#fef3c7', borderRadius: '6px',
+                        fontSize: '11px', wordBreak: 'break-all',
+                        color: '#78350f', fontFamily: 'monospace',
+                        cursor: 'pointer', border: '1px solid #fbbf24',
+                        userSelect: 'all',
+                    });
+                    var urlLabel = document.createElement('div');
+                    urlLabel.textContent = '\ud83d\udccb URL \u0111\u1ec3 d\u00e1n v\u00e0o Tampermonkey (click \u0111\u1ec3 copy):';
+                    Object.assign(urlLabel.style, { fontSize: '12px', color: '#92400e', marginTop: '10px', marginBottom: '3px', fontWeight: '600' });
+                    guide.appendChild(urlLabel);
+                    urlBox.title = 'Click \u0111\u1ec3 ch\u1ecdn to\u00e0n b\u1ed9';
+                    urlBox.textContent = RAW_URL;
+                    urlBox.addEventListener('click', function() {
+                        try { GM_setClipboard(RAW_URL); } catch(e) {}
+                        window.getSelection().selectAllChildren(urlBox);
+                    });
+                    guide.appendChild(urlBox);
+                    // Nut mo TM bang GM_openInTab (userscript co quyen mo chrome-extension://)
+                    var tmBtn = document.createElement('button');
+                    tmBtn.textContent = '\ud83d\udd17 M\u1edf Tampermonkey \u2192 Ti\u1ec7n \u00edch';
+                    Object.assign(tmBtn.style, {
+                        display: 'block', width: '100%', marginTop: '10px',
+                        padding: '9px 12px', background: '#16a34a', color: '#fff',
+                        border: 'none', borderRadius: '8px', cursor: 'pointer',
+                        fontWeight: '700', fontSize: '14px', textAlign: 'center',
+                    });
+                    tmBtn.addEventListener('click', function() {
+                        try { GM_openInTab('chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils', false); } catch(e) {
+                            window.open('chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils', '_blank');
+                        }
+                    });
+                    guide.appendChild(tmBtn);
                     installBtn.parentNode.insertBefore(guide, installBtn);
                 });
 
@@ -1826,7 +1858,7 @@
                 });
                 var card = document.createElement('div');
                 Object.assign(card.style, {
-                    background: 'linear-gradient(145deg,#1e1b4b 0%,#312e81 50%,#1e1b4b 100%)',
+                    background: 'linear-gradient(145deg,#0d47a1 0%,#1565c0 50%,#0d47a1 100%)',
                     borderRadius: '18px',
                     padding: '32px 28px 24px',
                     maxWidth: '380px',
@@ -1861,8 +1893,7 @@
                 Object.assign(name.style, {
                     fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px',
                     marginBottom: '4px',
-                    background: 'linear-gradient(90deg,#a5b4fc,#c4b5fd,#f0abfc)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    color: '#ffffff',
                 });
                 card.appendChild(name);
                 // Divider
@@ -1879,7 +1910,7 @@
                 card.appendChild(contact);
                 // Copyright
                 var copy = document.createElement('div');
-                copy.textContent = '\u00a9 Copyright @ Hoang Anh Jupiter';
+                copy.textContent = 'Copyright \u00a9 Hoang Anh Jupiter. All rights reserved';
                 Object.assign(copy.style, {
                     fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px',
                 });
@@ -2519,7 +2550,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.14';
+        var CURRENT_VERSION = '6.14.2';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
@@ -2635,12 +2666,25 @@
                 padding: '16px 18px', marginBottom: '16px',
             });
             guideBox.innerHTML =
-                '<div style="font-size:15px;font-weight:700;color:#15803d;margin-bottom:10px">\u2705 URL \u0111\u00e3 copy! Tampermonkey \u0111\u00e3 m\u1edf \u2192</div>' +
-                '<div style="font-size:15px;color:#166534;line-height:2">' +
-                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">1</b>Nh\u1ea5n v\u00e0o \u00f4 tr\u1eafng m\u1ee5c <b>Import from URL</b><br>' +
-                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">2</b>D\u00e1n <b>Ctrl+V</b> v\u00e0o \u00f4 \u0111\u00f3<br>' +
-                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">3</b>Nh\u1ea5n n\u00fat <b>Import</b> r\u1ed3i <b>Install</b>' +
+                '<div style="font-size:15px;font-weight:700;color:#15803d;margin-bottom:10px">\u2705 URL \u0111\u00e3 copy!</div>' +
+                '<div style="font-size:15px;color:#166534;line-height:2.2">' +
+                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">1</b>Nh\u1ea5n v\u00e0o n\u00fat b\u00ean d\u01b0\u1edbi<br>' +
+                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">2</b>D\u00e1n v\u00e0o \u00f4 <b>\u201cC\u00e0i t\u1eeb URL\u201d</b> v\u00e0 nh\u1ea5n <b>\u201cC\u00e0i \u0111\u1eb7t\u201d</b><br>' +
+                  '<b style="display:inline-block;background:#bbf7d0;border-radius:6px;padding:1px 8px;margin-right:6px">3</b>Reload l\u1ea1i trang web <b>(F5)</b>' +
                 '</div>';
+            // Nut mo TM bang GM_openInTab
+            var tmBtn2 = document.createElement('button');
+            tmBtn2.textContent = 'Nh\u1ea5n v\u00e0o \u0111\u00e2y';
+            Object.assign(tmBtn2.style, {
+                display: 'block', width: '100%', padding: '10px',
+                background: '#16a34a', color: '#fff', border: 'none',
+                borderRadius: '8px', cursor: 'pointer', fontWeight: '700',
+                fontSize: '14px', marginTop: '12px',
+            });
+            tmBtn2.addEventListener('click', function() {
+                try { GM_openInTab('chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=utils', false); } catch(e) {}
+            });
+            guideBox.appendChild(tmBtn2);
             body2.appendChild(guideBox);
 
             // install button
@@ -2664,14 +2708,6 @@
                         ta.value = RAW_URL; document.body.appendChild(ta);
                         ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
                     } catch(e2) {}
-                }
-                var knownIds = [
-                    'dhdgffkkebhmkfjojejmpbldmpobfkfo',
-                    'gcalenpjmijncebpfijmoaglllgpjagf',
-                    'lcmhiflmkkekcbknnhgpnodjfldoecnf',
-                ];
-                for (var i = 0; i < knownIds.length; i++) {
-                    try { window.open('chrome-extension://' + knownIds[i] + '/options.html#nav=utils', '_blank'); break; } catch(e) {}
                 }
                 installBtn2.style.display = 'none';
                 guideBox.style.display = 'block';
