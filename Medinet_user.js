@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.14.2
+// @version      6.15
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -376,7 +376,16 @@
                 // B3: Dia diem kham -> "Kham luu dong"
                 setTimeout(function() {
                     selectDxSelectBox('DoiTuongKham', 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng', function() {
-                        showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                        // B4 (neu co truong DoiTuong_M13): chon "Nguoi lao dong phi chinh thuc"
+                        setTimeout(function() {
+                            if (document.querySelector('.DoiTuong_M13')) {
+                                selectDxSelectBox('DoiTuong_M13', 'Ng\u01b0\u1eddi lao \u0111\u1ed9ng phi ch\u00ednh th\u1ee9c', function() {
+                                    showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                });
+                            } else {
+                                showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                            }
+                        }, 300);
                     });
                 }, 300);
             }, 200);
@@ -737,6 +746,7 @@
     var ACTIONS = [
         {
             emoji: '\ud83c\udfe0', label: 'Th\u00f4ng tin h\u00e0nh ch\u00ednh',
+            tier: 'pro',
             color: '#00796b', hoverColor: '#004d40',
             // Kha dung khi co field DoiTuongKham (dia diem kham) tren trang
             check: function() {
@@ -748,6 +758,7 @@
         },
         {
             emoji: '\ud83d\udccb', label: 'Ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3',
+            tier: 'pro',
             color: '#7b3f00', hoverColor: '#5c2d00',
             // Kha dung khi co cac dong B1, B1.1 ... B1.7 tren trang
             check: function() {
@@ -774,8 +785,31 @@
                     showToast('\ud83d\udccc \u0110\u00e3 \u0111i\u1ec1n xong: Ti\u1ec1n s\u1eed kh\u00e1m th\u1ef1c th\u1ec3');
                 });
             }
-        },        {
-            emoji: '\ud83d\udcc2', label: 'H\u1ecfi b\u1ec7nh v\u00e0 kh\u00e1m l\u00e2m s\u00e0ng',
+        },
+        {
+            emoji: '\ud83d\udcdd', label: 'Kh\u00e1m l\u00e2m s\u00e0ng ng\u01b0\u1eddi >18 tu\u1ed5i (M13)',
+            tier: 'lite',
+            color: '#2e7d32', hoverColor: '#1b5e20',
+            // Kha dung khi URL chua "KSKDK_ThongTinKham" (trang M13)
+            check: function() {
+                return window.location.href.indexOf('KSKDK_ThongTinKham') !== -1;
+            },
+            fn: function() {
+                resetAll();
+                setTimeout(function() {
+                    tickAllChuaPhatHien([]);
+                    selectRadioWithException('__none__', 'Lo\u1ea1i I', 'Lo\u1ea1i I');
+                    setNumberField('Mat_KhongKinh_MP', '10');
+                    setNumberField('Mat_KhongKinh_MT', '10');
+                    fillCommonNumbers();
+                    showToast('\ud83d\udcdd \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I (M13)');
+                }, 400);
+            }
+        },
+
+        {
+            emoji: '\ud83d\udcc2', label: 'H\u1ecfi b\u1ec7nh v\u00e0 kh\u00e1m l\u00e2m s\u00e0ng NCT (M14)',
+            tier: 'lite',
             color: '#1565c0', hoverColor: '#0d47a1',
             hasFlyout: true,
             // Kha dung khi co row D1 (trang Hoi benh va kham lam sang)
@@ -1312,12 +1346,12 @@
             fn: function() { /* handled by flyout */ }
         },
         {
-            emoji: '\ud83c\udfe5', label: 'Th\u00f4ng tin kh\u00e1m NCT',
+            emoji: '\ud83c\udfe5', label: 'Th\u00f4ng tin kh\u00e1m NCT (M14)',
+            tier: 'lite',
             color: '#1565c0', hoverColor: '#0d47a1',
+            // Kha dung khi URL chua "KNCT_ThongTinKham" (trang M14)
             check: function() {
-                return !!document.querySelector('.NoiKhoa_PhanLoai') ||
-                       !!document.querySelector('.Mat_PhanLoai') ||
-                       !!document.querySelector('.RHM_PhanLoai');
+                return window.location.href.indexOf('KNCT_ThongTinKham') !== -1;
             },
             fn: function() {
                 resetAll();
@@ -1359,6 +1393,7 @@
 
         {
             emoji: '\ud83d\udcc1', label: 'KSK Vi\u1ec7c l\u00e0m + L\u00e1i xe',
+            tier: 'pro',
             color: '#2e7d32', hoverColor: '#1b5e20',
             hasFlyout: true,
             noAgeLogic: true,
@@ -1508,6 +1543,7 @@
         },
                 {
             emoji: '\ud83d\udd04', label: 'C\u1eadp nh\u1eadt phi\u00ean b\u1ea3n',
+            tier: 'lite',
             color: '#0369a1', hoverColor: '#075985',
             check: function() { return true; },
             fn: function() {
@@ -1523,7 +1559,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.14.2';
+                var CURRENT_VERSION = '6.15';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -1838,7 +1874,8 @@
             }
         },
         {
-            emoji: '\u2139\ufe0f', label: 'T\u00e1c gi\u1ea3',
+            emoji: '\u2139\ufe0f', label: 'T\u00e1c gi\u1ea3 v\u00e0 b\u1ea3n quy\u1ec1n',
+            tier: 'lite',
             color: '#6d28d9', hoverColor: '#5b21b6',
             check: function() { return true; },
             fn: function() {
@@ -1912,9 +1949,51 @@
                 var copy = document.createElement('div');
                 copy.textContent = 'Copyright \u00a9 Hoang Anh Jupiter. All rights reserved';
                 Object.assign(copy.style, {
-                    fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px',
+                    fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px',
                 });
                 card.appendChild(copy);
+
+                // License info
+                var licInfoBox = document.createElement('div');
+                Object.assign(licInfoBox.style, {
+                    background: 'rgba(255,255,255,0.1)', borderRadius: '10px',
+                    padding: '12px 14px', marginBottom: '16px', textAlign: 'left',
+                });
+                var tier = getLicenseTier();
+                var daysLeft = getDaysLeft();
+                var tierBadge = tier === 'pro' ? ' \ud83d\udc51 Pro' : (tier === 'lite' ? ' \ud83d\udcdd Lite' : '');
+                var licStatus = tier
+                    ? ('\ud83d\udfe2 \u0110\u00e3 k\u00edch ho\u1ea1t' + tierBadge + ' \u2014 c\u00f2n <b>' + daysLeft + ' ng\u00e0y</b>')
+                    : '\ud83d\udd34 Ch\u01b0a k\u00edch ho\u1ea1t / \u0110\u00e3 h\u1ebft h\u1ea1n';
+                licInfoBox.innerHTML =
+                    '<div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:6px">\ud83d\udd11 <b>License</b></div>' +
+                    '<div style="font-size:14px;color:#fff;margin-bottom:6px">' + licStatus + '</div>' +
+                    '<div style="font-size:11px;color:rgba(255,255,255,0.5);word-break:break-all">M\u00e3 m\u00e1y: ' + getMachineId() + '</div>';
+                card.appendChild(licInfoBox);
+
+                // Button gia han
+                var licBtn = document.createElement('button');
+                licBtn.textContent = '\ud83d\udd11 Qu\u1ea3n l\u00fd License';
+                Object.assign(licBtn.style, {
+                    display: 'block', width: '100%', padding: '10px',
+                    background: 'rgba(255,255,255,0.15)', color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px',
+                    fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginBottom: '16px',
+                });
+                licBtn.addEventListener('click', function() {
+                    // Dong popup nay, mo popup license
+                    var authModal = document.getElementById('_mtt_author_modal');
+                    if (authModal) authModal.remove();
+                    showLicenseExpiredPopup();
+                });
+                card.appendChild(licBtn);
+
+                // Divider
+                var divLic2 = document.createElement('div');
+                Object.assign(divLic2.style, {
+                    height: '1px', background: 'rgba(255,255,255,0.15)', marginBottom: '16px',
+                });
+                card.appendChild(divLic2);
                 // Donate label
                 var donateLabel = document.createElement('div');
                 donateLabel.innerHTML = '\u2615 H\u00e3y \u1ee7ng h\u1ed9 t\u00f4i 1 ly Tr\u00e0 b\u1eb1ng c\u00e1ch Donate';
@@ -1945,6 +2024,283 @@
 
     // ================================================================
     //  DROPDOWN MENU (gan vao body, position:fixed)
+    // ================================================================
+    //  HE THONG LICENSE V2
+    //  - Machine ID: fingerprint trinh duyet (chi doc, khong the gia mao)
+    //  - License code: do TAC GIA tao bang trang HTML rieng (secret key chi tac gia biet)
+    //  - Han dung: het cuoi thang. Neu kich hoat tu ngay 20 tro di -> cong them 1 thang
+    //  - Script chi VERIFY, nguoi dung KHONG the tu sinh license hop le
+    // ================================================================
+    var LICENSE_KEY = '_mtt_license_v2';
+
+    // Ham hash djb2 don gian (dung de tao/verify code)
+    function _djb2(str) {
+        var h = 5381;
+        for (var i = 0; i < str.length; i++) {
+            h = (((h << 5) + h) ^ str.charCodeAt(i)) & 0xffffffff;
+        }
+        return (h >>> 0).toString(16).toUpperCase().padStart(8, '0');
+    }
+
+    // Tinh Machine ID tu fingerprint trinh duyet
+    function getMachineId() {
+        var raw = [
+            navigator.userAgent || '',
+            (screen.width || 0) + 'x' + (screen.height || 0),
+            navigator.language || '',
+            (navigator.hardwareConcurrency || 0) + '',
+            (navigator.platform || ''),
+        ].join('||');
+        return 'MID-' + _djb2(raw);
+    }
+
+    // Tinh ngay het han:
+    // - Kich hoat truoc ngay 20: het cuoi thang nay
+    // - Kich hoat tu ngay 20 tro di: het cuoi thang sau (bonus tranh thiet)
+    function calcExpiry(fromDate) {
+        var d = fromDate ? new Date(fromDate) : new Date();
+        var targetMonth = (d.getDate() >= 20) ? d.getMonth() + 2 : d.getMonth() + 1;
+        var year = d.getFullYear();
+        if (targetMonth > 12) { targetMonth = 1; year++; }
+        // 00:00:00 ngay 1 thang (targetMonth+1) = het han cuoi thang targetMonth
+        var exp = new Date(year, targetMonth, 1, 0, 0, 0, 0);
+        return exp.toISOString();
+    }
+
+    // Doc license tu localStorage
+    function getLicense() {
+        try {
+            var raw = localStorage.getItem(LICENSE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch(e) { return null; }
+    }
+
+    // Luu license sau khi verify thanh cong (tier = 'pro' | 'lite')
+    function saveLicense(licenseCode, expiry, tier) {
+        try {
+            localStorage.setItem(LICENSE_KEY, JSON.stringify({
+                code: licenseCode,
+                expiry: expiry,
+                tier: tier,
+                machineId: getMachineId(),
+            }));
+        } catch(e) {}
+    }
+
+    // Verify license code:
+    // Pro  code = djb2( machineId + '|' + 'YYYY-MM' + '|PRO|MTT2025' )
+    // Lite code = djb2( machineId + '|' + 'YYYY-MM' + '|LITE|MTT2025' )
+    // Secret suffix 'MTT2025' chi nam trong trang tao license cua tac gia
+    function verifyLicenseCode(code, machineId, expiry) {
+        var d = new Date(expiry);
+        var licMonth = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+        var ym = licMonth.getFullYear() + '-' + String(licMonth.getMonth() + 1).padStart(2, '0');
+        var expectedPro  = _djb2(machineId + '|' + ym + '|PRO|MTT2025');
+        var expectedLite = _djb2(machineId + '|' + ym + '|LITE|MTT2025');
+        var up = code.toUpperCase();
+        if (up === expectedPro)  return 'pro';
+        if (up === expectedLite) return 'lite';
+        return false;
+    }
+
+    // Lay tier hien tai ('pro' | 'lite' | null)
+    function getLicenseTier() {
+        var lic = getLicense();
+        if (!lic) return null;
+        if (lic.machineId !== getMachineId()) return null;
+        if (new Date(lic.expiry) <= new Date()) return null;
+        var tier = verifyLicenseCode(lic.code, lic.machineId, lic.expiry);
+        return tier || null;
+    }
+
+    // Kiem tra license hien tai co con hieu luc khong
+    function isLicenseValid() {
+        return getLicenseTier() !== null;
+    }
+
+    // So ngay con lai
+    function getDaysLeft() {
+        var lic = getLicense();
+        if (!lic) return 0;
+        var diff = new Date(lic.expiry) - new Date();
+        return Math.max(0, Math.ceil(diff / 86400000));
+    }
+
+    // Popup nhap license code (dung ca khi chua kich hoat lan khi het han)
+    function showLicenseExpiredPopup() {
+        var POPUP_ID = '_mtt_license_popup';
+        if (document.getElementById(POPUP_ID)) return;
+
+        var mid = getMachineId();
+        var lic = getLicense();
+        var isExp = lic && new Date(lic.expiry) <= new Date();
+
+        var overlay = document.createElement('div');
+        overlay.id = POPUP_ID;
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', zIndex: '99999999',
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Segoe UI, Arial, sans-serif',
+            backdropFilter: 'blur(5px)',
+        });
+
+        var card = document.createElement('div');
+        Object.assign(card.style, {
+            background: '#fff', borderRadius: '18px',
+            padding: '30px 28px 26px', maxWidth: '390px', width: '92vw',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+            textAlign: 'center', position: 'relative',
+        });
+
+        // Nut dong
+        var closeX = document.createElement('button');
+        closeX.textContent = '\u00d7';
+        Object.assign(closeX.style, {
+            position: 'absolute', top: '12px', right: '16px',
+            background: 'none', border: 'none', fontSize: '24px',
+            cursor: 'pointer', color: '#bbb', lineHeight: '1', padding: '0',
+        });
+        closeX.onclick = function() { overlay.remove(); };
+        card.appendChild(closeX);
+
+        // Icon
+        var iconEl = document.createElement('div');
+        iconEl.textContent = isExp ? '\ud83d\udd12' : '\ud83d\udd11';
+        Object.assign(iconEl.style, { fontSize: '44px', marginBottom: '10px' });
+        card.appendChild(iconEl);
+
+        // Tieu de
+        var titleEl = document.createElement('div');
+        titleEl.textContent = isExp
+            ? 'License \u0111\u00e3 h\u1ebft h\u1ea1n'
+            : 'Ch\u01b0a k\u00edch ho\u1ea1t';
+        Object.assign(titleEl.style, {
+            fontSize: '20px', fontWeight: '800',
+            color: isExp ? '#c62828' : '#e65100',
+            marginBottom: '6px',
+        });
+        card.appendChild(titleEl);
+
+        // Huong dan lien he
+        var subMsg = document.createElement('div');
+        subMsg.innerHTML =
+            'Vui l\u00f2ng li\u00ean h\u1ec7 t\u00e1c gi\u1ea3 \u0111\u1ec3 \u0111\u01b0\u1ee3c c\u1ea5p m\u00e3:<br>' +
+            '<span style="font-size:17px;font-weight:700;color:#1565c0">\u260e\ufe0f\u00a00868.91.97.90</span>';
+        Object.assign(subMsg.style, {
+            fontSize: '14px', color: '#666', lineHeight: '2', marginBottom: '18px',
+        });
+        card.appendChild(subMsg);
+
+        // O hien thi + copy Machine ID
+        var midBox = document.createElement('div');
+        Object.assign(midBox.style, {
+            background: '#f5f7fa', borderRadius: '10px',
+            padding: '10px 14px', marginBottom: '16px',
+            textAlign: 'left', border: '1px solid #e0e4ea',
+        });
+        midBox.innerHTML =
+            '<div style="font-size:11px;color:#999;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">M\u00e3 m\u00e1y c\u1ee7a b\u1ea1n</div>' +
+            '<div style="display:flex;align-items:center;gap:8px">' +
+            '<b style="font-size:15px;color:#1565c0;letter-spacing:1px;flex:1">' + mid + '</b>' +
+            '<button id="_mtt_copy_mid" style="padding:5px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap">\ud83d\udccb Sao ch\u00e9p</button>' +
+            '</div>';
+        card.appendChild(midBox);
+
+        setTimeout(function() {
+            var copyMidBtn = document.getElementById('_mtt_copy_mid');
+            if (!copyMidBtn) return;
+            copyMidBtn.addEventListener('click', function() {
+                try { GM_setClipboard(mid); } catch(e) {
+                    try {
+                        var ta = document.createElement('textarea');
+                        ta.value = mid; document.body.appendChild(ta);
+                        ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                    } catch(e2) {}
+                }
+                copyMidBtn.textContent = '\u2705 \u0110\u00e3 sao!';
+                setTimeout(function() { copyMidBtn.textContent = '\ud83d\udccb Sao ch\u00e9p'; }, 1800);
+            });
+        }, 50);
+
+        // Duong ke
+        var divEl = document.createElement('div');
+        Object.assign(divEl.style, { height: '1px', background: '#eee', marginBottom: '16px' });
+        card.appendChild(divEl);
+
+        // Nhap ma license
+        var codeLabel = document.createElement('div');
+        codeLabel.textContent = 'Nh\u1eadp m\u00e3 license \u0111\u01b0\u1ee3c c\u1ea5p:';
+        Object.assign(codeLabel.style, {
+            fontSize: '13px', color: '#555', marginBottom: '8px',
+            textAlign: 'left', fontWeight: '600',
+        });
+        card.appendChild(codeLabel);
+
+        var codeInput = document.createElement('input');
+        codeInput.type = 'text';
+        codeInput.placeholder = 'VD: A1B2C3D4';
+        codeInput.maxLength = 20;
+        Object.assign(codeInput.style, {
+            width: '100%', padding: '11px 14px', border: '2px solid #ddd',
+            borderRadius: '10px', fontSize: '16px', outline: 'none',
+            textAlign: 'center', letterSpacing: '2px', fontWeight: '700',
+            textTransform: 'uppercase', boxSizing: 'border-box', marginBottom: '6px',
+        });
+        codeInput.addEventListener('focus', function() { codeInput.style.borderColor = '#1565c0'; });
+        codeInput.addEventListener('blur',  function() { codeInput.style.borderColor = '#ddd'; });
+        codeInput.addEventListener('input', function() { codeInput.value = codeInput.value.toUpperCase(); });
+        card.appendChild(codeInput);
+
+        var errEl = document.createElement('div');
+        errEl.textContent = '';
+        Object.assign(errEl.style, {
+            fontSize: '13px', color: '#c62828', minHeight: '20px',
+            marginBottom: '10px', textAlign: 'left',
+        });
+        card.appendChild(errEl);
+
+        // Nut kich hoat
+        var activateBtn = document.createElement('button');
+        activateBtn.textContent = '\u2705 K\u00edch ho\u1ea1t';
+        Object.assign(activateBtn.style, {
+            width: '100%', padding: '13px',
+            background: 'linear-gradient(135deg,#1565c0,#0d47a1)',
+            color: '#fff', border: 'none', borderRadius: '12px',
+            fontSize: '16px', fontWeight: '800', cursor: 'pointer',
+        });
+        activateBtn.addEventListener('click', function() {
+            var code = codeInput.value.trim().toUpperCase();
+            if (!code) { errEl.textContent = '\u26a0\ufe0f Vui l\u00f2ng nh\u1eadp m\u00e3!'; return; }
+            var expiry = calcExpiry();
+            var tier = verifyLicenseCode(code, mid, expiry);
+            if (tier) {
+                saveLicense(code, expiry, tier);
+                var expDate = new Date(expiry);
+                var expStr = 'cu\u1ed1i th\u00e1ng ' +
+                    expDate.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
+                var tierLabel = tier === 'pro' ? '\ud83d\udc51 Pro' : '\ud83d\udcdd Lite';
+                activateBtn.textContent = '\ud83c\udf89 K\u00edch ho\u1ea1t th\u00e0nh c\u00f4ng!';
+                activateBtn.style.background = tier === 'pro' ? '#0d47a1' : '#2e7d32';
+                setTimeout(function() {
+                    overlay.remove();
+                    showToast('\ud83d\udd11 ' + tierLabel + ' \u2014 h\u1ea1n d\u00f9ng \u0111\u1ebfn ' + expStr);
+                }, 1000);
+            } else {
+                errEl.textContent = '\u274c M\u00e3 kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c sai m\u00e1y!';
+                codeInput.style.borderColor = '#c62828';
+                setTimeout(function() { codeInput.style.borderColor = '#ddd'; errEl.textContent = ''; }, 2500);
+            }
+        });
+        codeInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') activateBtn.click(); });
+        card.appendChild(activateBtn);
+
+        overlay.appendChild(card);
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+        setTimeout(function() { codeInput.focus(); }, 100);
+    }
+
     // ================================================================
 
     var MENU_ID    = '_mtt_menu';
@@ -2020,22 +2376,35 @@
     }, true);
 
     function updateMenuAvailability(menu) {
+        var tier = getLicenseTier(); // 'pro' | 'lite' | null
         menu.querySelectorAll('._mtt_item').forEach(function(item) {
             var idx = parseInt(item.dataset.actionIdx, 10);
             var action = ACTIONS[idx];
             if (!action) return;
+            // Ban Lite: an hoan toan cac muc Pro (khong hien mo)
+            if (tier === 'lite' && action.tier === 'pro') {
+                item.style.display = 'none';
+                return;
+            }
+            item.style.display = '';
             var available = !action.check || action.check();
             if (available) {
                 item.removeAttribute('data-unavailable');
                 item.title = '';
             } else {
                 item.setAttribute('data-unavailable', '1');
-                item.title = 'Không khả dụng trên trang này';
+                item.title = 'Kh\u00f4ng kh\u1ea3 d\u1ee5ng tr\u00ean trang n\u00e0y';
             }
         });
     }
 
     function openMenu(anchorBtn) {
+        // Kiem tra license truoc khi mo menu
+        if (!isLicenseValid()) {
+            // An menu, chi hien popup thong bao
+            showLicenseExpiredPopup();
+            return;
+        }
         var menu = getOrBuildMenu();
         updateMenuAvailability(menu);
         var rect = anchorBtn.getBoundingClientRect();
@@ -2404,31 +2773,115 @@
         }
     }
 
+    /** Doc ngay sinh dang ddmmyyyy tu form */
+    function _getPatientBirthDDMMYYYY() {
+        // Thu input hidden truoc (gia tri ISO)
+        var el = document.querySelector('.NgaySinh input[type="hidden"]');
+        if (!el) el = document.querySelector('.NgaySinh dx-date-box input[type="hidden"]');
+        if (el && el.value) {
+            // ISO: YYYY-MM-DD hoac DD/MM/YYYY
+            var m = el.value.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (m) return m[3] + m[2] + m[1]; // ddmmyyyy
+        }
+        var dateInput = document.querySelector('.NgaySinh input.dx-texteditor-input');
+        if (dateInput && dateInput.value) {
+            var parts = dateInput.value.split('/');
+            if (parts.length === 3) {
+                var dd = parts[0].padStart(2,'0');
+                var mm = parts[1].padStart(2,'0');
+                var yyyy = parts[2];
+                return dd + mm + yyyy; // ddmmyyyy
+            }
+        }
+        return null;
+    }
+
+    /** Doc so CMND/CCCD tu form */
+    function _getPatientCMND() {
+        var selectors = [
+            '.SoCMND input.dx-texteditor-input',
+            '.CCCD input.dx-texteditor-input',
+            '.SoCCCD input.dx-texteditor-input',
+            'input[placeholder*="CMND"]',
+            'input[placeholder*="CCCD"]',
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+            var el = document.querySelector(selectors[i]);
+            if (el && el.value.trim()) return el.value.trim().replace(/\s+/g,'');
+        }
+        // fallback: tim input chi co so, 9-12 ky tu
+        var inputs = document.querySelectorAll('input.dx-texteditor-input');
+        for (var j = 0; j < inputs.length; j++) {
+            var v = inputs[j].value.trim();
+            if (/^\d{9,12}$/.test(v)) return v;
+        }
+        return null;
+    }
+
+    /**
+     * Chuan hoa ten file: bo dau, viet thuong, chi giu chu + so.
+     * Tra ve mang cac "token" (cum lien tuc chu/so), bo khoang trang/gach.
+     */
+    function _tokenizeFileName(str) {
+        return str
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\u0111/g, 'd')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(function(t) { return t.length > 0; });
+    }
+
     /**
      * Tim anh khop voi benh nhan hien tai va upload.
-     * Tra ve true neu thanh cong.
+     * Logic khop moi: kiem tra 3 thanh phan (ten, ddmmyyyy, cmnd) deu
+     * xuat hien trong tap hop token cua ten file (bo het khoang trang, gach, dau phay).
      */
     function _tryMatchAndUpload() {
-        var name = _getPatientFullName();
-        var year = _getPatientBirthYear();
-        if (!name) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c H\u1ecd v\u00e0 T\u00ean b\u1ec7nh nh\u00e2n'); return false; }
-        if (!year) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c N\u0103m sinh b\u1ec7nh nh\u00e2n'); return false; }
+        var name  = _getPatientFullName();
+        var dob   = _getPatientBirthDDMMYYYY();
+        var cmnd  = _getPatientCMND();
 
-        var key = _normalizePhotoName(name + ' ' + year);
+        if (!name) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c H\u1ecd v\u00e0 T\u00ean'); return false; }
+        if (!dob)  { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c Ng\u00e0y sinh'); return false; }
+        if (!cmnd) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c CMND/CCCD'); return false; }
+
+        // Chuan hoa 3 thanh phan tim kiem
+        var nameTokens = _tokenizeFileName(name); // VD: ['bui','thi','phuc']
+        var dobToken   = dob.replace(/\D/g,'');   // VD: '21061954'
+        var cmndToken  = cmnd.replace(/\D/g,'');  // VD: '075154000543'
+
         var matched = null;
+        _photoMap.forEach(function(file) {
+            if (matched) return;
+            var fileTokens = _tokenizeFileName(file.name.replace(/\.[^.]+$/, ''));
+            var fileStr = fileTokens.join(''); // chuoi lien tuc khong khoang trang
 
-        // Khop chinh xac
-        _photoMap.forEach(function(file, k) { if (!matched && k === key) matched = file; });
-        // Khop mo (ten file chua key)
-        if (!matched) _photoMap.forEach(function(file, k) { if (!matched && k.indexOf(key) !== -1) matched = file; });
+            // Kiem tra ten: tat ca token cua ten benh nhan phai co trong fileTokens (theo thu tu)
+            var nameMatch = true;
+            var searchFrom = 0;
+            for (var i = 0; i < nameTokens.length; i++) {
+                var found = false;
+                for (var j = searchFrom; j < fileTokens.length; j++) {
+                    if (fileTokens[j] === nameTokens[i]) { searchFrom = j + 1; found = true; break; }
+                }
+                if (!found) { nameMatch = false; break; }
+            }
+            if (!nameMatch) return;
+
+            // Kiem tra ngay sinh (ddmmyyyy) co trong chuoi lien tuc
+            if (fileStr.indexOf(dobToken) === -1) return;
+
+            // Kiem tra CMND/CCCD co trong chuoi lien tuc
+            if (fileStr.indexOf(cmndToken) === -1) return;
+
+            matched = file;
+        });
 
         if (!matched) {
-            var mapKeys = [];
-            _photoMap.forEach(function(f, k) { mapKeys.push(k); });
-            // Hien thi ca raw filename goc de phat hien ky tu an
-            var rawNames = [];
-            _photoMap.forEach(function(f) { rawNames.push(f.name); });
-            showToast('\u274c Key:[' + key + '] Raw:[' + rawNames.join('|') + ']');
+            showToast('\u274c Kh\u00f4ng t\u00ecm th\u1ea5y file h\u1ee3p l\u1ec7');
             return false;
         }
 
@@ -2465,8 +2918,8 @@
             for (var i = 0; i < files.length; i++) {
                 var f = files[i];
                 if (!IMAGE_EXT.test(f.name)) continue;
-                var key = _normalizePhotoName(f.name.replace(/\.[^.]+$/, ''));
-                _photoMap.set(key, f);
+                // Key = ten file goc (giu nguyen de _tryMatchAndUpload tu phan tich)
+                _photoMap.set(f.name, f);
             }
             showToast('\ud83d\udcc2 \u0110\u00e3 \u0111\u1ecdc ' + _photoMap.size + ' \u1ea3nh trong th\u01b0 m\u1ee5c');
             setTimeout(_tryMatchAndUpload, 300);
@@ -2509,7 +2962,15 @@
             var nativeInput = _getUploadNodeIfMatch(e.target);
             if (!nativeInput) return;
 
-            // Chan su kien goc (khong cho DX mo dialog file)
+            // Kiem tra tier: chi ban Pro moi duoc chon thu muc tu dong
+            var tier = getLicenseTier();
+            if (tier !== 'pro') {
+                // Ban Lite hoac chua kich hoat: de DevExtreme xu ly binh thuong
+                // (khong chan su kien, mo dialog chon file mac dinh)
+                return;
+            }
+
+            // Ban Pro: chan su kien goc (khong cho DX mo dialog file)
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
@@ -2550,7 +3011,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.14.2';
+        var CURRENT_VERSION = '6.15';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
