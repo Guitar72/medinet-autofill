@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.15
+// @version      6.16
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*

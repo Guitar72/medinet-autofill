@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.15
+// @version      6.16
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -1346,7 +1346,31 @@
             fn: function() { /* handled by flyout */ }
         },
         {
-            emoji: '\ud83c\udfe5', label: 'Th\u00f4ng tin kh\u00e1m NCT (M14)',
+            emoji: '\u2705', label: 'Th\u00f4ng tin kh\u00e1m NCT b\u00ecnh th\u01b0\u1eddng (M14)',
+            tier: 'lite',
+            color: '#2e7d32', hoverColor: '#1b5e20',
+            // Chi kha dung tren trang KNCT_ThongTinKham
+            check: function() {
+                return window.location.href.indexOf('KNCT_ThongTinKham') !== -1;
+            },
+            fn: function() {
+                resetAll();
+                setTimeout(function() {
+                    // Tick "Chua phat hien bat thuong" cho TAT CA cac chuyen khoa
+                    // (ke ca Noi Khoa, Mat, RHM)
+                    tickAllChuaPhatHien([]);
+
+                    // Chon Loai I cho TAT CA cac chuyen khoa (khong co exception)
+                    selectRadioMultiException([], '', 'Lo\u1ea1i I');
+
+                    fillCommonNumbers();
+
+                    showToast('\u2705 NCT b\u00ecnh th\u01b0\u1eddng \u2014 \u0111\u00e3 tick Ch\u01b0a ph\u00e1t hi\u1ec7n + Lo\u1ea1i I to\u00e0n b\u1ed9!');
+                }, 400);
+            }
+        },
+        {
+            emoji: '\ud83c\udfe5', label: 'Th\u00f4ng tin kh\u00e1m NCT b\u1ec7nh l\u00fd (M14)',
             tier: 'lite',
             color: '#1565c0', hoverColor: '#0d47a1',
             // Kha dung khi URL chua "KNCT_ThongTinKham" (trang M14)
@@ -1385,7 +1409,7 @@
                     // ICD RHM: K08.1
                     setTimeout(function() {
                         fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1');
-                        showToast('\ud83c\udfe5 Th\u00f4ng tin kh\u00e1m NCT \u0111\u00e3 \u0111i\u1ec1n xong!');
+                        showToast('\ud83c\udfe5 Th\u00f4ng tin kh\u00e1m NCT b\u1ec7nh l\u00fd \u0111\u00e3 \u0111i\u1ec1n xong!');
                     }, 1500 * 5);
                 }, 400);
             }
@@ -1559,7 +1583,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.15';
+                var CURRENT_VERSION = '6.16';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -1961,9 +1985,19 @@
                 });
                 var tier = getLicenseTier();
                 var daysLeft = getDaysLeft();
-                var tierBadge = tier === 'pro' ? ' \ud83d\udc51 Pro' : (tier === 'lite' ? ' \ud83d\udcdd Lite' : '');
+                var minutesLeft = getMinutesLeft();
+                var tierBadgeMap = {
+                    pro: ' \ud83d\udc51 Pro',
+                    lite: ' \ud83d\udcdd Lite',
+                    lite_weekly: ' \ud83d\udcdd Lite Weekly',
+                    trial: ' \u23f3 Trial',
+                };
+                var tierBadge = tier ? (tierBadgeMap[tier] || '') : '';
+                var timeStr = (tier === 'trial')
+                    ? (minutesLeft + ' ph\u00fat')
+                    : (daysLeft + ' ng\u00e0y');
                 var licStatus = tier
-                    ? ('\ud83d\udfe2 \u0110\u00e3 k\u00edch ho\u1ea1t' + tierBadge + ' \u2014 c\u00f2n <b>' + daysLeft + ' ng\u00e0y</b>')
+                    ? ('\ud83d\udfe2 \u0110\u00e3 k\u00edch ho\u1ea1t' + tierBadge + ' \u2014 c\u00f2n <b>' + timeStr + '</b>')
                     : '\ud83d\udd34 Ch\u01b0a k\u00edch ho\u1ea1t / \u0110\u00e3 h\u1ebft h\u1ea1n';
                 licInfoBox.innerHTML =
                     '<div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:6px">\ud83d\udd11 <b>License</b></div>' +
@@ -2057,14 +2091,14 @@
     // Tinh ngay het han:
     // - Kich hoat truoc ngay 20: het cuoi thang nay
     // - Kich hoat tu ngay 20 tro di: het cuoi thang sau (bonus tranh thiet)
-    function calcExpiry(fromDate) {
-        var d = fromDate ? new Date(fromDate) : new Date();
-        var targetMonth = (d.getDate() >= 20) ? d.getMonth() + 2 : d.getMonth() + 1;
-        var year = d.getFullYear();
+    // calcExpiry: chi dung cho PRO/LIT (LIW/TRI da tu tinh trong verifyLicenseCode)
+    // pro/lite: het cuoi thang; bonus +1 thang neu kich hoat >= ngay 20
+    function calcExpiry() {
+        var now = new Date();
+        var targetMonth = (now.getDate() >= 20) ? now.getMonth() + 2 : now.getMonth() + 1;
+        var year = now.getFullYear();
         if (targetMonth > 12) { targetMonth = 1; year++; }
-        // 00:00:00 ngay 1 thang (targetMonth+1) = het han cuoi thang targetMonth
-        var exp = new Date(year, targetMonth, 1, 0, 0, 0, 0);
-        return exp.toISOString();
+        return new Date(year, targetMonth, 1, 0, 0, 0, 0).toISOString();
     }
 
     // Doc license tu localStorage
@@ -2075,7 +2109,7 @@
         } catch(e) { return null; }
     }
 
-    // Luu license sau khi verify thanh cong (tier = 'pro' | 'lite')
+    // Luu license
     function saveLicense(licenseCode, expiry, tier) {
         try {
             localStorage.setItem(LICENSE_KEY, JSON.stringify({
@@ -2087,38 +2121,84 @@
         } catch(e) {}
     }
 
-    // Verify license code:
-    // Pro  code = djb2( machineId + '|' + 'YYYY-MM' + '|PRO|MTT2025' )
-    // Lite code = djb2( machineId + '|' + 'YYYY-MM' + '|LITE|MTT2025' )
-    // Secret suffix 'MTT2025' chi nam trong trang tao license cua tac gia
-    function verifyLicenseCode(code, machineId, expiry) {
-        var d = new Date(expiry);
-        var licMonth = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-        var ym = licMonth.getFullYear() + '-' + String(licMonth.getMonth() + 1).padStart(2, '0');
-        var expectedPro  = _djb2(machineId + '|' + ym + '|PRO|MTT2025');
-        var expectedLite = _djb2(machineId + '|' + ym + '|LITE|MTT2025');
-        var up = code.toUpperCase();
-        if (up === expectedPro)  return 'pro';
-        if (up === expectedLite) return 'lite';
+    // Cau truc ma: 3 ky tu dau la prefix tier, 5 ky tu sau la djb2
+    // PRO + djb2( machineId + '|' + YYYY-MM + '|PRO|MTT2025' )     -> het cuoi thang
+    // LIT + djb2( machineId + '|' + YYYY-MM + '|LITE|MTT2025' )    -> het cuoi thang
+    // LIW + djb2( machineId + '|LIWEEKLY|MTT2025' )                 -> +7 ngay tu luc kich hoat
+    // TRI + djb2( machineId + '|TRIAL|MTT2025' )                    -> +120 phut tu luc kich hoat
+    // LIW/TRI KHONG can dateStr: ma chi phu thuoc machineId, expiry tinh tai thoi diem kich hoat
+    function verifyLicenseCode(code, machineId) {
+        var up = code.toUpperCase().replace(/\s/g, '');
+        var prefix = up.substring(0, 3);
+        var tierMap = { PRO: 'pro', LIT: 'lite', LIW: 'lite_weekly', TRI: 'trial' };
+        var saltMap = { PRO: 'PRO', LIT: 'LITE', LIW: 'LIWEEKLY', TRI: 'TRIAL' };
+        if (!tierMap[prefix]) return false;
+
+        var now = new Date();
+
+        if (prefix === 'LIW') {
+            // Ma chi phu thuoc machineId, khong phu thuoc thoi gian
+            var expected = prefix + _djb2(machineId + '|LIWEEKLY|MTT2025').substring(0, 5);
+            if (up !== expected) return false;
+            var expiry = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            return { tier: 'lite_weekly', expiry: expiry };
+        }
+
+        if (prefix === 'TRI') {
+            var expected = prefix + _djb2(machineId + '|TRIAL|MTT2025').substring(0, 5);
+            if (up !== expected) return false;
+            var expiry = new Date(now.getTime() + 120 * 60 * 1000).toISOString();
+            return { tier: 'trial', expiry: expiry };
+        }
+
+        // PRO / LIT: thu thang nay va thang truoc
+        var ym1 = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+        var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+        var ym0 = prev.getFullYear() + '-' + String(prev.getMonth()+1).padStart(2,'0');
+
+        for (var i = 0; i < 2; i++) {
+            var ym = i === 0 ? ym1 : ym0;
+            var expected = prefix + _djb2(machineId + '|' + ym + '|' + saltMap[prefix] + '|MTT2025').substring(0, 5);
+            if (up === expected) {
+                // Tinh expiry: dau thang ke tiep = het cuoi thang nay
+                var parts = ym.split('-');
+                var y = parseInt(parts[0]), m = parseInt(parts[1]);
+                var nm = m + 1 > 12 ? 1 : m + 1;
+                var ny = m + 1 > 12 ? y + 1 : y;
+                var expiry = new Date(ny, nm - 1, 1, 0, 0, 0, 0).toISOString();
+                return { tier: tierMap[prefix], expiry: expiry };
+            }
+        }
         return false;
     }
 
-    // Lay tier hien tai ('pro' | 'lite' | null)
+    // Lay tier hien tai ('pro' | 'lite' | 'lite_weekly' | 'trial' | null)
     function getLicenseTier() {
         var lic = getLicense();
         if (!lic) return null;
         if (lic.machineId !== getMachineId()) return null;
         if (new Date(lic.expiry) <= new Date()) return null;
-        var tier = verifyLicenseCode(lic.code, lic.machineId, lic.expiry);
-        return tier || null;
+        // Xac nhan lai sig bang cach kiem tra prefix
+        var up = (lic.code || '').toUpperCase();
+        var prefix = up.substring(0, 3);
+        var tierMap = { PRO: 'pro', LIT: 'lite', LIW: 'lite_weekly', TRI: 'trial' };
+        return tierMap[prefix] || null;
     }
 
-    // Kiem tra license hien tai co con hieu luc khong
+    // Kiem tra co hieu luc khong
     function isLicenseValid() {
         return getLicenseTier() !== null;
     }
 
-    // So ngay con lai
+    // So phut con lai (cho trial)
+    function getMinutesLeft() {
+        var lic = getLicense();
+        if (!lic) return 0;
+        var diff = new Date(lic.expiry) - new Date();
+        return Math.max(0, Math.ceil(diff / 60000));
+    }
+
+    // So ngay con lai (cho cac ban khac)
     function getDaysLeft() {
         var lic = getLicense();
         if (!lic) return 0;
@@ -2270,21 +2350,38 @@
             fontSize: '16px', fontWeight: '800', cursor: 'pointer',
         });
         activateBtn.addEventListener('click', function() {
-            var code = codeInput.value.trim().toUpperCase();
+            var code = codeInput.value.trim().toUpperCase().replace(/\s/g,'');
             if (!code) { errEl.textContent = '\u26a0\ufe0f Vui l\u00f2ng nh\u1eadp m\u00e3!'; return; }
-            var expiry = calcExpiry();
-            var tier = verifyLicenseCode(code, mid, expiry);
-            if (tier) {
-                saveLicense(code, expiry, tier);
-                var expDate = new Date(expiry);
-                var expStr = 'cu\u1ed1i th\u00e1ng ' +
-                    expDate.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
-                var tierLabel = tier === 'pro' ? '\ud83d\udc51 Pro' : '\ud83d\udcdd Lite';
+            var result = verifyLicenseCode(code, mid);
+            if (result) {
+                saveLicense(code, result.expiry, result.tier);
+                var tierLabels = {
+                    pro: '\ud83d\udc51 Pro',
+                    lite: '\ud83d\udcdd Lite',
+                    lite_weekly: '\ud83d\udcdd Lite Weekly',
+                    trial: '\u23f3 Trial',
+                };
+                var tierColors = {
+                    pro: '#0d47a1', lite: '#2e7d32',
+                    lite_weekly: '#558b2f', trial: '#e65100',
+                };
+                var tierLabel = tierLabels[result.tier] || result.tier;
+                var expDate = new Date(result.expiry);
+                var expStr;
+                if (result.tier === 'trial') {
+                    expStr = '\u23f3 120 ph\u00fat (h\u1ebft l\u00fac ' +
+                        expDate.toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'}) + ')';
+                } else if (result.tier === 'lite_weekly') {
+                    expStr = expDate.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric'});
+                } else {
+                    expStr = 'cu\u1ed1i th\u00e1ng ' +
+                        expDate.toLocaleDateString('vi-VN',{month:'long',year:'numeric'});
+                }
                 activateBtn.textContent = '\ud83c\udf89 K\u00edch ho\u1ea1t th\u00e0nh c\u00f4ng!';
-                activateBtn.style.background = tier === 'pro' ? '#0d47a1' : '#2e7d32';
+                activateBtn.style.background = tierColors[result.tier] || '#1565c0';
                 setTimeout(function() {
                     overlay.remove();
-                    showToast('\ud83d\udd11 ' + tierLabel + ' \u2014 h\u1ea1n d\u00f9ng \u0111\u1ebfn ' + expStr);
+                    showToast('\ud83d\udd11 ' + tierLabel + ' \u2014 h\u1ea1n d\u00f9ng: ' + expStr);
                 }, 1000);
             } else {
                 errEl.textContent = '\u274c M\u00e3 kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c sai m\u00e1y!';
@@ -2376,13 +2473,17 @@
     }, true);
 
     function updateMenuAvailability(menu) {
-        var tier = getLicenseTier(); // 'pro' | 'lite' | null
+        var tier = getLicenseTier();
+        // trial = quyen nhu pro; lite_weekly = quyen nhu lite
+        var effectiveTier = (tier === 'trial') ? 'pro'
+                          : (tier === 'lite_weekly') ? 'lite'
+                          : tier; // 'pro' | 'lite' | null
         menu.querySelectorAll('._mtt_item').forEach(function(item) {
             var idx = parseInt(item.dataset.actionIdx, 10);
             var action = ACTIONS[idx];
             if (!action) return;
-            // Ban Lite: an hoan toan cac muc Pro (khong hien mo)
-            if (tier === 'lite' && action.tier === 'pro') {
+            // Ban Lite / LiteWeekly: an hoan toan muc Pro
+            if (effectiveTier === 'lite' && action.tier === 'pro') {
                 item.style.display = 'none';
                 return;
             }
@@ -2962,9 +3063,10 @@
             var nativeInput = _getUploadNodeIfMatch(e.target);
             if (!nativeInput) return;
 
-            // Kiem tra tier: chi ban Pro moi duoc chon thu muc tu dong
+            // Kiem tra tier: Pro va Trial duoc chon thu muc tu dong
             var tier = getLicenseTier();
-            if (tier !== 'pro') {
+            var effectiveTier = (tier === 'trial') ? 'pro' : (tier === 'lite_weekly') ? 'lite' : tier;
+            if (effectiveTier !== 'pro') {
                 // Ban Lite hoac chua kich hoat: de DevExtreme xu ly binh thuong
                 // (khong chan su kien, mo dialog chon file mac dinh)
                 return;
@@ -3011,7 +3113,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.15';
+        var CURRENT_VERSION = '6.16';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
