@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.17
+// @version      6.17.2
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.js
 // ==/UserScript==
@@ -1583,7 +1585,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.17';
+                var CURRENT_VERSION = '6.17.2';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2101,23 +2103,34 @@
         return new Date(year, targetMonth, 1, 0, 0, 0, 0).toISOString();
     }
 
-    // Doc license tu localStorage
+    // Doc license - uu tien GM storage (ben vung hon), fallback localStorage de tuong thich cu
     function getLicense() {
         try {
+            // Thu GM storage truoc (khong bi xoa khi clear localStorage/cache)
+            var gmVal = GM_getValue(LICENSE_KEY, null);
+            if (gmVal) return typeof gmVal === 'string' ? JSON.parse(gmVal) : gmVal;
+            // Fallback: doc tu localStorage (de migrate ban cu sang ban moi)
             var raw = localStorage.getItem(LICENSE_KEY);
-            return raw ? JSON.parse(raw) : null;
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                // Tu dong migrate sang GM storage va xoa khoi localStorage
+                GM_setValue(LICENSE_KEY, parsed);
+                localStorage.removeItem(LICENSE_KEY);
+                return parsed;
+            }
+            return null;
         } catch(e) { return null; }
     }
 
-    // Luu license
+    // Luu license vao GM storage (khong bi xoa khi clear localStorage/cache)
     function saveLicense(licenseCode, expiry, tier) {
         try {
-            localStorage.setItem(LICENSE_KEY, JSON.stringify({
+            GM_setValue(LICENSE_KEY, {
                 code: licenseCode,
                 expiry: expiry,
                 tier: tier,
                 machineId: getMachineId(),
-            }));
+            });
         } catch(e) {}
     }
 
@@ -3114,7 +3127,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.17';
+        var CURRENT_VERSION = '6.17.2';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
