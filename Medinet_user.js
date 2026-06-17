@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.16
+// @version      6.17
 // @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -1583,7 +1583,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.16';
+                var CURRENT_VERSION = '6.17';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2173,10 +2173,11 @@
     }
 
     // Lay tier hien tai ('pro' | 'lite' | 'lite_weekly' | 'trial' | null)
+    // Chi kiem tra expiry - KHONG kiem tra machineId sau khi da kich hoat
+    // (machineId chi duoc kiem tra luc nhap ma lan dau, tranh hoi lai moi lan khoi dong)
     function getLicenseTier() {
         var lic = getLicense();
         if (!lic) return null;
-        if (lic.machineId !== getMachineId()) return null;
         if (new Date(lic.expiry) <= new Date()) return null;
         // Xac nhan lai sig bang cach kiem tra prefix
         var up = (lic.code || '').toUpperCase();
@@ -3113,7 +3114,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.16';
+        var CURRENT_VERSION = '6.17';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
