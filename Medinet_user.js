@@ -1,20 +1,101 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.21
-// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto Upload Anh Thong Minh (tu dong khop thong tin)
+// @version      6.21.5
+// @description  Nut Thao Tac Nhanh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        unsafeWindow
+// @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.js
 // ==/UserScript==
 
 (function () {
     'use strict';
+
+    // ================================================================
+    //  FIX QUAN TRONG: dam bao cac doi tuong Event (MouseEvent,
+    //  PointerEvent, KeyboardEvent, DataTransfer...) duoc TAO RA thuoc
+    //  ve REALM (vung nho JS) CUA CHINH TRANG WEB, khong phai cua
+    //  "sandbox" rieng ma Tampermonkey tao ra cho script co khai bao
+    //  @grant (GM_setClipboard, GM_setValue...).
+    //
+    //  LY DO: khi mot Tampermonkey script khai bao @grant cu the (khac
+    //  "none"), no chay trong 1 "sandbox" rieng, tach biet khoi JS
+    //  realm that su cua trang. Neu ta dung "new MouseEvent(...)" hay
+    //  "new PointerEvent(...)" trong sandbox roi dispatch len 1 phan
+    //  tu DOM that cua trang, cac framework nhu Angular/DevExtreme co
+    //  the KHONG nhan dien duoc do la "su kien that" (vi cac kiem tra
+    //  noi bo cua chung, vi du "instanceof MouseEvent", duoc so sanh
+    //  voi class MouseEvent CUA TRANG, khac voi class MouseEvent cua
+    //  sandbox du cung ten). Ket qua: click/nhap lieu tu dong VAN
+    //  "chay" (khong loi) nhung trang web AM THAM bo qua, khong phan
+    //  hoi gi ca - dung trieu chung ban gap: tab "Danh sach" khong
+    //  duoc chuyen, dong ket qua tim kiem khong duoc click.
+    //
+    //  Script "Upload anh hang loat" ban dau dung "@grant none" (KHONG
+    //  sandbox - chay thang trong realm cua trang) nen luon hoat dong
+    //  tot. Khi ghep vao 1 file voi Medinet_user.js (von can cac quyen
+    //  GM_setClipboard/GM_setValue... nen PHAI sandbox), toan bo file
+    //  gop bi dat vao sandbox - day la nguyen nhân that su.
+    //
+    //  CACH FIX: "unsafeWindow" la doi tuong window THAT CUA TRANG ma
+    //  Tampermonkey luon cung cap cho script (du co sandbox hay
+    //  khong). Ta lay cac class Event/MouseEvent/... TU unsafeWindow,
+    //  roi GAN DE (shadow) len bien cuc bo trong pham vi IIFE nay - moi
+    //  noi trong file tu gio goi "new MouseEvent(...)" se tu dong dung
+    //  ban cua unsafeWindow thay vi ban cua sandbox, KHONG can sua tung
+    //  dong code rieng le.
+    // ================================================================
+    var _pageWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    var MouseEvent = _pageWin.MouseEvent;
+    var PointerEvent = _pageWin.PointerEvent;
+    var KeyboardEvent = _pageWin.KeyboardEvent;
+    var Event = _pageWin.Event;
+    var DataTransfer = _pageWin.DataTransfer;
+    var HTMLInputElement = _pageWin.HTMLInputElement;
+
+    // ================================================================
+    //  KENH PHOI HOP GIUA "Upload anh thong minh" (don le, phia duoi
+    //  trong file nay) VA "Upload anh hang loat" (Excel/CCCD, duoc
+    //  ghep vao CUOI file nay nhu mot IIFE rieng).
+    //
+    //  LY DO TON TAI: truoc khi co bien nay, neu nguoi dung tung bam
+    //  bat "Upload anh thong minh" (du chi 1 lan trong phien lam viec),
+    //  no se gan 1 listener "click" o muc document, pha CAPTURE, va
+    //  KHONG BAO GIO tu thao go cho den khi load lai trang. Listener
+    //  nay chan (preventDefault/stopImmediatePropagation) BAT KY click
+    //  nao roi vao vung upload anh (icon camera, o input file an cua
+    //  dx-fileuploader) MIEN LA tren form dang co truong "Ngay sinh"
+    //  -- dung HOAN CANH ma "Upload anh hang loat" luon gap phai khi no
+    //  tu dong click vao icon camera cua TUNG benh nhan trong vong lap.
+    //  Ket qua: cac click tu dong cua che do hang loat bi "Upload anh
+    //  thong minh" cuop mat, khien hang loat chay sai/ket/khong on dinh.
+    //
+    //  CACH KHAC PHUC: dung 1 object dung chung tren window de:
+    //   1) "Upload anh hang loat" bao cho "Upload anh thong minh" biet
+    //      no dang chay (batchActive = true) va CHU DONG tat che do
+    //      don le truoc khi bat dau vong lap (goi disableSingleMode()).
+    //   2) Du gi di nua, listener cua che do don le se TU BO QUA moi
+    //      click khi batchActive = true (phong truong hop bi bat lai
+    //      giua chung).
+    //   3) Ca 2 che do dung CHUNG 1 danh sach "hiddenInputs" de biet
+    //      dau la cac <input type=file webkitdirectory> AN do CHINH
+    //      CAC SCRIPT NAY tao ra (de chon thu muc anh), tranh nham lan
+    //      voi o input that cua dx-fileuploader khi tim "o upload that"
+    //      tren form (truoc day moi script chi loai tru o input AN CUA
+    //      RIENG NO, khong biet ve o input AN cua script kia).
+    // ================================================================
+    window.__medinetUpload = window.__medinetUpload || {
+        batchActive: false,
+        hiddenInputs: new Set(),
+        disableSingleMode: null // se duoc gan o phan "AUTO UPLOAD ANH THONG MINH" phia duoi
+    };
 
     // ================================================================
     //  TIEN ICH CHUNG
@@ -31,7 +112,7 @@
     // showToast: dinh nghia o phan "AUTO UPLOAD ANH THONG MINH" phia duoi
     // (ham moi showToast(msg, type) tuong thich nguoc 100% voi cac loi goi showToast(msg) cu)
 
-    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    var nativeSetter = Object.getOwnPropertyDescriptor(_pageWin.HTMLInputElement.prototype, 'value').set;
 
     function setNumberField(cls, value) {
         var fieldItem = document.querySelector('.' + cls);
@@ -1416,6 +1497,32 @@
                 enableSingleMode();
             }
         },
+        {
+            emoji: '📊', label: 'Upload ảnh hàng loạt',
+            // Chi danh cho ban Pro: voi tier 'pro', muc nay se TU DONG BI AN
+            // hoan toan (khong hien trong menu) khi license dang la Lite/
+            // Lite_weekly hoac chua kich hoat - xem ham updateMenuAvailability().
+            tier: 'pro',
+            color: '#1565c0', hoverColor: '#0d47a1',
+            // Dung CHUNG dieu kien voi "Upload anh thong minh" o tren: chi
+            // "sang" (kha dung) tren trang "Thong tin hanh chinh", con lai thi
+            // muc nay se bi "mo" + vo hieu hoa (xem updateMenuAvailability()).
+            check: function() {
+                return window.location.href.indexOf('_TTHC') !== -1;
+            },
+            fn: function() {
+                // Chu dong tat che do "Upload anh thong minh" TRUOC KHI mo
+                // panel hang loat, de tranh moi kha nang xung dot click ngay
+                // ca truoc khi nguoi dung bam "Bat dau" (vi du: bam "Tai file
+                // Excel"/"Chon thu muc anh" trong luc che do don le van con bat).
+                disableSingleMode();
+                if (window.__medinetUpload && typeof window.__medinetUpload.openBatchPanel === 'function') {
+                    window.__medinetUpload.openBatchPanel();
+                } else {
+                    showToast('⚠️ Chức năng "Upload ảnh hàng loạt" chưa sẵn sàng, vui lòng tải lại trang.', 'warn');
+                }
+            }
+        },
 
         {
             emoji: '\ud83d\udcc1', label: 'KSK Vi\u1ec7c l\u00e0m + L\u00e1i xe',
@@ -1585,7 +1692,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.21';
+                var CURRENT_VERSION = '6.21.5';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2090,6 +2197,15 @@
         return 'MID-' + _djb2(raw);
     }
 
+    // Dinh dang ngay theo DD-MM-YYYY (dung dau "-", KHONG dung "/" cua toLocaleDateString
+    // vi-VN) de hien thi han dung mot cach tuong minh, vd: "30-06-2026".
+    function formatDDMMYYYY(date) {
+        var d = String(date.getDate()).padStart(2, '0');
+        var m = String(date.getMonth() + 1).padStart(2, '0');
+        var y = date.getFullYear();
+        return d + '-' + m + '-' + y;
+    }
+
     // Tinh ngay het han:
     // - Kich hoat truoc ngay 20: het cuoi thang nay
     // - Kich hoat tu ngay 20 tro di: het cuoi thang sau (bonus tranh thiet)
@@ -2390,10 +2506,17 @@
                     expStr = '\u23f3 120 ph\u00fat (h\u1ebft l\u00fac ' +
                         expDate.toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'}) + ')';
                 } else if (result.tier === 'lite_weekly') {
-                    expStr = expDate.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric'});
+                    expStr = '\u0110\u1ebfn ' + formatDDMMYYYY(expDate);
                 } else {
-                    expStr = 'cu\u1ed1i th\u00e1ng ' +
-                        expDate.toLocaleDateString('vi-VN',{month:'long',year:'numeric'});
+                    // QUAN TRONG: result.expiry (PRO/LIT) la moc THOI GIAN HET HAN
+                    // (00:00:00 ngay 1 cua thang KE TIEP - dung de SO SANH "het han
+                    // hay chua"), KHONG PHAI ngay nguoi dung con dung duoc. Ngay
+                    // CON DUNG DUOC CUOI CUNG la 1 khoanh khac TRUOC moc do (lui lai
+                    // 1ms se roi ve dung ngay cuoi cung cua thang hien tai/thang
+                    // duoc cong them). Truoc day code lay luon thang cua moc het han
+                    // de hien thi ("cuoi thang X") nen bi LECH 1 THANG so voi thuc te.
+                    var lastValidDay = new Date(expDate.getTime() - 1);
+                    expStr = '\u0110\u1ebfn ' + formatDDMMYYYY(lastValidDay);
                 }
                 activateBtn.textContent = '\ud83c\udf89 K\u00edch ho\u1ea1t th\u00e0nh c\u00f4ng!';
                 activateBtn.style.background = tierColors[result.tier] || '#1565c0';
@@ -2422,6 +2545,25 @@
     var WRAPPER_ID = '_mtt_wrapper';
     var _styleInjected = false;
 
+    // ================================================================
+    //  NUT BAT/TAT SCRIPT (toggle) - nam tren dau menu "Thao tac nhanh".
+    //  Khi TAT: toan bo cac muc thao tac nhanh trong menu nay bi vo hieu
+    //  hoa (mo + khong bam duoc), tranh kich hoat nham. Trang thai duoc
+    //  luu vao GM storage de giu nguyen qua cac lan tai lai trang.
+    // ================================================================
+    var SCRIPT_ENABLED_KEY = '_mtt_script_enabled';
+
+    function isScriptEnabled() {
+        try {
+            var v = GM_getValue(SCRIPT_ENABLED_KEY, true);
+            return v !== false; // mac dinh BAT neu chua tung luu
+        } catch (e) { return true; }
+    }
+
+    function setScriptEnabled(enabled) {
+        try { GM_setValue(SCRIPT_ENABLED_KEY, !!enabled); } catch (e) {}
+    }
+
     function injectStyle() {
         if (_styleInjected || document.getElementById('_mtt_style')) return;
         _styleInjected = true;
@@ -2437,7 +2579,21 @@
             '._mtt_item:not([data-unavailable]):hover{opacity:0.78;transform:translateX(2px);}' +
             '._mtt_item:active:not([data-unavailable]){transform:scale(0.97);}' +
             '._mtt_item[data-unavailable]{opacity:0.32;cursor:not-allowed;filter:grayscale(0.5);}' +
-            '._mtt_sep{display:none;}';
+            '._mtt_sep{display:none;}' +
+            '._mtt_toggle_row{display:flex;align-items:center;justify-content:space-between;width:100%;' +
+            'padding:9px 12px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;' +
+            'background:#f3f4f6;border:1.5px solid #e5e7eb;transition:background 0.2s;}' +
+            '._mtt_toggle_row:hover{background:#e9ebee;}' +
+            '._mtt_toggle_label{display:flex;align-items:center;gap:8px;}' +
+            '._mtt_toggle_row[data-on="0"] ._mtt_toggle_label{color:#b91c1c;}' +
+            '._mtt_toggle_row[data-on="1"] ._mtt_toggle_label{color:#15803d;}' +
+            '._mtt_switch{position:relative;width:38px;height:20px;border-radius:10px;background:#cbd5e1;' +
+            'flex-shrink:0;transition:background 0.2s;}' +
+            '._mtt_switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;' +
+            'border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 2px rgba(0,0,0,0.35);}' +
+            '._mtt_toggle_row[data-on="1"] ._mtt_switch{background:#16a34a;}' +
+            '._mtt_toggle_row[data-on="1"] ._mtt_switch::after{left:20px;}' +
+            '._mtt_toggle_sep{height:1px;background:#e5e7eb;margin:2px 0 4px;}';
         document.head.appendChild(s);
     }
 
@@ -2448,6 +2604,25 @@
         injectStyle();
         var menu = document.createElement('div');
         menu.id = MENU_ID;
+
+        // --- Hang dau menu: nut bat/tat toan bo script ---
+        var toggleRow = document.createElement('div');
+        toggleRow.id = '_mtt_toggle_row';
+        toggleRow.className = '_mtt_toggle_row';
+        toggleRow.innerHTML =
+            '<span class="_mtt_toggle_label"><span style="font-size:15px">\u26a1</span><span id="_mtt_toggle_text">B\u1eadt</span></span>' +
+            '<span class="_mtt_switch"></span>';
+        toggleRow.addEventListener('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            var newState = !isScriptEnabled();
+            setScriptEnabled(newState);
+            updateMenuAvailability(menu);
+            showToast(newState ? '\u26a1 Đã BẬT script' : '\ud83d\udd0c Đã TẮT script - các thao tác nhanh sẽ không chạy', newState ? 'success' : 'warn');
+        });
+        menu.appendChild(toggleRow);
+        var toggleSep = document.createElement('div');
+        toggleSep.className = '_mtt_toggle_sep';
+        menu.appendChild(toggleSep);
 
         ACTIONS.forEach(function(action, idx) {
             var item = document.createElement('button');
@@ -2491,6 +2666,16 @@
     }, true);
 
     function updateMenuAvailability(menu) {
+        var scriptEnabled = isScriptEnabled();
+
+        // Dong bo UI hang toggle (chu "Bật"/"Tắt" + vi tri cong gat)
+        var toggleRow = menu.querySelector('#_mtt_toggle_row');
+        if (toggleRow) {
+            toggleRow.setAttribute('data-on', scriptEnabled ? '1' : '0');
+            var toggleText = toggleRow.querySelector('#_mtt_toggle_text');
+            if (toggleText) toggleText.textContent = scriptEnabled ? 'B\u1eadt' : 'T\u1eaft';
+        }
+
         var tier = getLicenseTier();
         // trial = quyen nhu pro; lite_weekly = quyen nhu lite
         var effectiveTier = (tier === 'trial') ? 'pro'
@@ -2506,6 +2691,13 @@
                 return;
             }
             item.style.display = '';
+            // Script dang TAT (nut toggle dau menu) -> vo hieu hoa TOAN BO muc,
+            // bat ke trang hien tai co kha dung hay khong.
+            if (!scriptEnabled) {
+                item.setAttribute('data-unavailable', '1');
+                item.title = 'Script đang TẮT - bật lên ở đầu menu để sử dụng';
+                return;
+            }
             var available = !action.check || action.check();
             if (available) {
                 item.removeAttribute('data-unavailable');
@@ -2922,15 +3114,20 @@
         if (!el) return false;
         ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function(type) {
             try {
-                el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+                el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: _pageWin }));
             } catch (e) {}
         });
+        // Lop bao hiem cuoi: goi THANG phuong thuc click() native cua chinh phan tu DOM.
+        // Day la cach DUY NHAT dam bao 100% dung "realm" cua trang web, bat ke script
+        // co dang chay trong sandbox cua Tampermonkey hay khong, vi no khong can tao
+        // moi bat ky doi tuong Event nao ca - trinh duyet tu lo viec do.
+        try { el.click(); } catch (e) {}
         return true;
     }
 
     /** Set gia tri input theo cach React/Angular nhan dien duoc (qua native setter) roi fire event. */
     function setInputValue(input, value) {
-        var proto = window.HTMLInputElement.prototype;
+        var proto = _pageWin.HTMLInputElement.prototype;
         var desc = Object.getOwnPropertyDescriptor(proto, 'value');
         input.focus();
         if (desc && desc.set) {
@@ -2966,18 +3163,23 @@
         return true;
     }
 
-    /** Tim input[type=file] thuc su (cua dx-fileuploader), bo qua input thu muc cua chinh script. */
+    /** Tim input[type=file] thuc su (cua dx-fileuploader), bo qua input "noi bo" (data-medinet-internal) cua CA 2 che do. */
     function findNativeFileInput() {
         var all = document.querySelectorAll('input[type="file"]');
         for (var i = 0; i < all.length; i++) {
             var el = all[i];
+            if (el.dataset.medinetInternal) continue;
             if (el === SINGLE_MODE.folderInput) continue;
+            if (window.__medinetUpload.hiddenInputs.has(el)) continue;
             if (el.closest('.dx-fileuploader-input-wrapper') || el.classList.contains('dx-fileuploader-input')) {
                 return el;
             }
         }
         for (var j = 0; j < all.length; j++) {
-            if (all[j] !== SINGLE_MODE.folderInput) return all[j];
+            if (all[j].dataset.medinetInternal) continue;
+            if (all[j] === SINGLE_MODE.folderInput) continue;
+            if (window.__medinetUpload.hiddenInputs.has(all[j])) continue;
+            return all[j];
         }
         return null;
     }
@@ -3147,7 +3349,9 @@
             SINGLE_MODE.folderInput.multiple = true;
             SINGLE_MODE.folderInput.accept = 'image/jpeg,image/png,image/webp,image/jpg';
             SINGLE_MODE.folderInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
+            SINGLE_MODE.folderInput.dataset.medinetInternal = '1';
             document.body.appendChild(SINGLE_MODE.folderInput);
+            window.__medinetUpload.hiddenInputs.add(SINGLE_MODE.folderInput);
         }
         try { SINGLE_MODE.folderInput.value = ''; } catch (e) {}
 
@@ -3170,7 +3374,18 @@
     function getUploadNodeIfMatch(target) {
         var node = target;
         for (var depth = 0; depth < 10 && node && node !== document.body; depth++) {
-            if (node.tagName === 'INPUT' && node.type === 'file' && node !== SINGLE_MODE.folderInput) {
+            // QUAN TRONG: chi coi la "input upload anh" neu KHONG phai 1 input
+            // "noi bo" do CHINH CAC SCRIPT NAY tu tao ra cho muc dich khac (vi
+            // du: input chon file Excel, input chon thu muc anh cua che do hang
+            // loat...). Truoc day chi loai tru rieng SINGLE_MODE.folderInput,
+            // nen khi "Upload anh hang loat" tao input <input type=file> rieng
+            // de chon file Excel va tu dong .click() vao no, listener nay nham
+            // tuong la nguoi dung dang bam vao o upload anh that, chan mat
+            // (preventDefault) va mo nham hop thoai chon THU MUC ANH thay vi
+            // hop thoai chon FILE EXCEL. Moi input "noi bo" gio duoc danh dau
+            // bang thuoc tinh data-medinet-internal khi tao ra (xem cac ham
+            // pickExcelFile/pickPhotoFolder/singleModePickFolderAndMatch).
+            if (node.tagName === 'INPUT' && node.type === 'file' && !node.dataset.medinetInternal) {
                 return node;
             }
             if (node.classList && (
@@ -3192,10 +3407,18 @@
 
     /** Bat che do "Tu dong khop thong tin": gan listener click chan vung upload anh. */
     function enableSingleMode() {
+        if (window.__medinetUpload.batchActive) {
+            showToast('⚠️ "Upload ảnh hàng loạt" đang chạy, không thể bật "Upload ảnh thông minh" lúc này.', 'warn');
+            return;
+        }
         if (SINGLE_MODE.active) return;
         SINGLE_MODE.active = true;
 
         _singleModeClickHandler = function(e) {
+            // QUAN TRONG: neu "Upload anh hang loat" dang chay, KHONG can thiep
+            // gi ca - de nguyen click tu dong cua no di qua binh thuong.
+            if (window.__medinetUpload.batchActive) return;
+
             // Chi can thiep khi trang dang co form chi tiet benh nhan (co field Ngay sinh)
             if (!document.querySelector('.NgaySinh')) return;
 
@@ -3233,6 +3456,9 @@
             _singleModeClickHandler = null;
         }
     }
+    // Cho phep "Upload anh hang loat" (IIFE rieng o cuoi file) tu tat che do
+    // don le truoc khi no bat dau vong lap tu dong.
+    window.__medinetUpload.disableSingleMode = disableSingleMode;
 
     // ================================================================
     //  KHOI DONG
@@ -3250,7 +3476,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.21';
+        var CURRENT_VERSION = '6.21.5';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
@@ -3499,5 +3725,1750 @@
         }
     })();
 
+
+})();
+
+
+// ================================================================================
+//  PHAN 2: "UPLOAD ANH HANG LOAT" (Excel / CCCD Matching)
+//  Duoc ghep tu file rieng "Medinet-Tu_Dong_Upload_Anh_Hang_Loat_1_6.js"
+//  (giu nguyen ban quyen logic, CHI sua phan phoi hop voi "Upload anh thong
+//  minh" o tren - xem cac doan co ghi chu "window.__medinetUpload").
+//  Duoc boc trong IIFE RIENG (closure rieng) nen KHONG xung dot ten bien/ham
+//  voi phan code phia tren, du ca 2 phan co nhieu ham trung ten
+//  (showToast, onlyDigits, sleep, waitFor, findNativeFileInput, v.v...).
+// ================================================================================
+(function () {
+    'use strict';
+
+    // ================================================================
+    //  FIX QUAN TRONG (giong het phan dau file Medinet_user.js o tren):
+    //  ep cac class Event/MouseEvent/PointerEvent/KeyboardEvent/
+    //  DataTransfer/HTMLInputElement dung TRONG IIFE NAY phai la ban
+    //  CUA TRANG WEB THAT (unsafeWindow), khong phai ban cua sandbox
+    //  Tampermonkey - neu khong, cac click/nhap lieu tu dong (dac biet
+    //  la click chuyen Tab "Danh sach" va click dong ket qua trong
+    //  DataGrid) se "chay qua" ma khong duoc Angular/DevExtreme cua
+    //  trang nhan dien, gay ra hien tuong "khong bam duoc Tab/dong KQ"
+    //  khi gop chung vao 1 script co khai bao @grant. Xem ghi chu chi
+    //  tiet o dau file (truoc IIFE thu nhat).
+    // ================================================================
+    var _pageWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    var MouseEvent = _pageWin.MouseEvent;
+    var PointerEvent = _pageWin.PointerEvent;
+    var KeyboardEvent = _pageWin.KeyboardEvent;
+    var Event = _pageWin.Event;
+    var DataTransfer = _pageWin.DataTransfer;
+    var HTMLInputElement = _pageWin.HTMLInputElement;
+
+    /* ======================================================================
+     *  PHAN 0: HANG SO & STATE TOAN CUC
+     * ====================================================================== */
+
+    var STATE = {
+        status: 'idle',          // idle | running | paused | stopped
+        rows: [],                // toan bo danh sach benh nhan tu Excel (chua loc)
+        queue: [],                // danh sach DA LOC - chi nhung benh nhan co anh khop, dung de chay vong lap
+        photoMap: null,          // Map<filename, File>
+        currentIndex: -1,        // dang xu ly dong nao (0-based, trong STATE.queue)
+        logs: [],                // {stt, hoTen, cccd, ngaySinh, ketQua, lyDo, anhDaDung, thoiGian}
+        overwriteExisting: false,// tuy chon: ghi de BN da co anh
+        includeUnmatched: false, // tuy chon: chay qua TAT CA BN, ke ca chua co anh khop (de ra soat/thong ke)
+        stopRequested: false,
+        pauseRequested: false,
+        resolvePause: null,      // dung de "thuc day" lai khi het pause
+    };
+
+    var CONFIG = {
+        DELAY_AFTER_TAB_CLICK: 600,
+        DELAY_AFTER_SEARCH_INPUT: 900,   // doi DataGrid filter xong
+        DELAY_AFTER_ROW_CLICK: 1400,     // doi form chi tiet load xong
+        DELAY_AFTER_CAMERA_CLICK: 200,
+        DELAY_AFTER_PHOTO_MATCH: 900,    // doi anh inject xong truoc khi luu
+        DELAY_AFTER_SAVE_CLICK: 1600,    // doi luu xong
+        DELAY_AFTER_CLEAR_SEARCH: 400,
+        MAX_WAIT_SEARCH_RESULT: 8000,    // cho ket qua filter xuat hien toi da
+        MAX_WAIT_FORM_LOAD: 12000,       // cho form chi tiet load toi da
+        MAX_WAIT_SAVE_DONE: 12000,
+        RETRY_PER_PATIENT: 1,             // so lan thu lai khi loi (khong tinh lan dau)
+    };
+
+    /* ======================================================================
+     *  PHAN 0.1: TOAST
+     * ====================================================================== */
+
+    function showToast(msg, type) {
+        var old = document.getElementById('_medinet_toast');
+        if (old) old.remove();
+        var toast = document.createElement('div');
+        toast.id = '_medinet_toast';
+        toast.textContent = msg;
+        var bg = type === 'error' ? '#c0392b' : type === 'success' ? '#27ae60' : type === 'warn' ? '#e67e22' : '#323232';
+        Object.assign(toast.style, {
+            position: 'fixed', bottom: '90px', right: '24px', zIndex: '2147483000',
+            padding: '10px 16px', background: bg, color: '#fff',
+            borderRadius: '6px', fontSize: '13px', fontFamily: 'Segoe UI, Arial, sans-serif',
+            boxShadow: '0 3px 8px rgba(0,0,0,0.3)',
+            opacity: '1', transition: 'opacity 0.5s', maxWidth: '360px',
+        });
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.style.opacity = '0'; }, 2800);
+        setTimeout(function() { toast.remove(); }, 3400);
+    }
+
+    /* ======================================================================
+     *  PHAN 0.2: TIEN ICH CHUO / SO / NGAY
+     * ====================================================================== */
+
+    function normalizeNoDiacritics(str) {
+        return String(str || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\u0111/g, 'd')
+            .replace(/[^a-z0-9]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function onlyDigits(str) {
+        return String(str || '').replace(/\D/g, '');
+    }
+
+    function sleep(ms) {
+        return new Promise(function(resolve) { setTimeout(resolve, ms); });
+    }
+
+    /** Cho mot dieu kien tro thanh true, polling moi `interval` ms, toi da `timeout` ms. */
+    function waitFor(conditionFn, timeout, interval) {
+        timeout = timeout || 8000;
+        interval = interval || 150;
+        return new Promise(function(resolve, reject) {
+            var start = Date.now();
+            (function check() {
+                var result;
+                try { result = conditionFn(); } catch (e) { result = null; }
+                if (result) { resolve(result); return; }
+                if (Date.now() - start >= timeout) { reject(new Error('Timeout')); return; }
+                setTimeout(check, interval);
+            })();
+        });
+    }
+
+    /** Kiem tra co dang bi yeu cau Dung/Tam ngung, neu Tam ngung thi cho den khi Tiep tuc. */
+    function checkPauseOrStop() {
+        if (STATE.stopRequested) {
+            return Promise.reject(new Error('__STOPPED__'));
+        }
+        if (STATE.pauseRequested) {
+            STATE.status = 'paused';
+            updateStatusUI();
+            return new Promise(function(resolve, reject) {
+                STATE.resolvePause = function() {
+                    if (STATE.stopRequested) { reject(new Error('__STOPPED__')); return; }
+                    STATE.status = 'running';
+                    updateStatusUI();
+                    resolve();
+                };
+            });
+        }
+        return Promise.resolve();
+    }
+
+    /* ======================================================================
+     *  PHAN 1: PHOTO MATCHING ENGINE
+     *  (giu nguyen logic da kiem chung tu ban "Auto Photo Upload")
+     * ====================================================================== */
+
+    /** Tach token, bo dau, viet thuong, chi giu chu+so */
+    function tokenizeNoDiacritics(str) {
+        return String(str || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\u0111/g, 'd')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(function(t) { return t.length > 0; });
+    }
+
+    /** Tach token giu dau tieng Viet (chi thuong hoa, bo ky tu dac biet) */
+    function tokenizeKeepDiacritics(str) {
+        return String(str || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\u00c0-\u024f\u1e00-\u1eff]+/gi, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(function(t) { return t.length > 0; });
+    }
+
+    /** Kiem tra ten benh nhan co khop voi token ten file (co dau hoac khong dau, roi rac hoac lien) */
+    function matchPatientName(nameTokensNoDiac, nameTokensRaw, fileTokens, fileTokensRaw) {
+        function checkOrder(needles, haystack) {
+            var from = 0;
+            for (var i = 0; i < needles.length; i++) {
+                var ok = false;
+                for (var j = from; j < haystack.length; j++) {
+                    if (haystack[j] === needles[i]) { from = j + 1; ok = true; break; }
+                }
+                if (!ok) return false;
+            }
+            return true;
+        }
+        if (checkOrder(nameTokensNoDiac, fileTokens)) return true;
+        if (checkOrder(nameTokensRaw, fileTokensRaw)) return true;
+
+        var concatNoDiac = nameTokensNoDiac.join('');
+        var fileStr = fileTokens.join('');
+        if (concatNoDiac.length > 0 && fileStr.indexOf(concatNoDiac) !== -1) return true;
+
+        var concatRaw = nameTokensRaw.join('');
+        var fileStrRaw = fileTokensRaw.join('');
+        if (concatRaw.length > 0 && fileStrRaw.indexOf(concatRaw) !== -1) return true;
+
+        return false;
+    }
+
+    /**
+     * Tim file anh khop voi 1 benh nhan (theo Ho Ten + Nam/Ngay sinh + CCCD).
+     * @param {{hoTen:string, ngaySinhDDMMYYYY:string, cccd:string}} patient
+     * @param {Map<string,File>} photoMap
+     * @returns {File|null}
+     */
+    function findMatchingPhoto(patient, photoMap) {
+        if (!photoMap || photoMap.size === 0) return null;
+
+        var dobClean = onlyDigits(patient.ngaySinhDDMMYYYY);
+        var dobFull = dobClean.length === 8 ? dobClean : '';
+        var dobYear = dobClean.length >= 4 ? dobClean.slice(-4) : '';
+        var cccdToken = onlyDigits(patient.cccd);
+
+        var nameTokensNoDiac = tokenizeNoDiacritics(patient.hoTen);
+        var nameTokensRaw = tokenizeKeepDiacritics(patient.hoTen);
+
+        var found = null;
+        photoMap.forEach(function(file) {
+            if (found) return;
+            var baseName = file.name.replace(/\.[^.]+$/, '');
+            var fileTokens = tokenizeNoDiacritics(baseName);
+            var fileTokensRaw = tokenizeKeepDiacritics(baseName);
+            var fileStr = fileTokens.join('');
+
+            if (!matchPatientName(nameTokensNoDiac, nameTokensRaw, fileTokens, fileTokensRaw)) return;
+
+            var dobMatch = (dobFull && fileStr.indexOf(dobFull) !== -1) ||
+                           (dobYear && fileStr.indexOf(dobYear) !== -1);
+            if (!dobMatch) return;
+
+            if (!cccdToken) return;
+            var fileDigitStr = onlyDigits(baseName);
+            if (fileDigitStr.indexOf(cccdToken) === -1) return;
+
+            found = file;
+        });
+        return found;
+    }
+
+    /* ======================================================================
+     *  PHAN 2: DOC THU MUC ANH (webkitdirectory)
+     * ====================================================================== */
+
+    var _folderInput = null;
+    var IMAGE_EXT_RE = /\.(jpe?g|png|webp)$/i;
+
+    /**
+     * Mo dialog chon thu muc anh, doc danh sach file theo TUNG LO (batch)
+     * de khong block UI thread khi thu muc co nhieu anh (vai tram - vai nghin file).
+     * @param {function(number,number):void} [onProgress] - goi lai voi (daDoc, tongSo) sau moi lo
+     */
+    function pickPhotoFolder(onProgress) {
+        return new Promise(function(resolve) {
+            if (!_folderInput) {
+                _folderInput = document.createElement('input');
+                _folderInput.type = 'file';
+                _folderInput.webkitdirectory = true;
+                _folderInput.multiple = true;
+                _folderInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
+                _folderInput.dataset.medinetInternal = '1';
+                document.body.appendChild(_folderInput);
+                if (window.__medinetUpload) window.__medinetUpload.hiddenInputs.add(_folderInput);
+            }
+            try { _folderInput.value = ''; } catch (e) {}
+            _folderInput.onchange = function() {
+                var files = _folderInput.files;
+                var map = new Map();
+                var total = files ? files.length : 0;
+
+                if (!total) { resolve(map); return; }
+
+                var BATCH_SIZE = 150; // so file xu ly moi lo truoc khi nhuong lai cho UI ve lai
+                var idx = 0;
+
+                function processBatch() {
+                    var end = Math.min(idx + BATCH_SIZE, total);
+                    for (; idx < end; idx++) {
+                        var f = files[idx];
+                        if (IMAGE_EXT_RE.test(f.name)) {
+                            map.set(f.name, f);
+                        }
+                    }
+                    if (onProgress) onProgress(idx, total);
+
+                    if (idx < total) {
+                        setTimeout(processBatch, 0); // nhuong lai main thread de UI ve lai so dem
+                    } else {
+                        resolve(map);
+                    }
+                }
+                processBatch();
+            };
+            _folderInput.click();
+        });
+    }
+
+    /* ======================================================================
+     *  PHAN 3: DOC FILE EXCEL DANH SACH BENH NHAN
+     *  Cot ky vong: Stt | Xu ly | Ho Ten | Dinh Danh Ca Nhan | Ngay Sinh | ...
+     * ====================================================================== */
+
+    function pickExcelFile() {
+        return new Promise(function(resolve, reject) {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.xlsx,.xls';
+            input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
+            input.dataset.medinetInternal = '1'; // tranh bi "Upload anh thong minh" nham la o upload anh
+            document.body.appendChild(input);
+            input.onchange = function() {
+                var file = input.files && input.files[0];
+                input.remove();
+                if (!file) { reject(new Error('Khong co file')); return; }
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        var data = new Uint8Array(e.target.result);
+                        var wb = XLSX.read(data, { type: 'array', cellDates: true });
+                        resolve(wb);
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = function() { reject(new Error('Khong doc duoc file')); };
+                reader.readAsArrayBuffer(file);
+            };
+            input.click();
+        });
+    }
+
+    /** Tim ten cot gan dung nhat trong header (khong phan biet hoa thuong/dau) */
+    function findColumnIndex(headerRow, candidates) {
+        var normHeader = headerRow.map(function(h) { return normalizeNoDiacritics(h); });
+        for (var c = 0; c < candidates.length; c++) {
+            var target = normalizeNoDiacritics(candidates[c]);
+            for (var i = 0; i < normHeader.length; i++) {
+                if (normHeader[i] === target) return i;
+            }
+        }
+        // fallback: tim chua substring
+        for (var c2 = 0; c2 < candidates.length; c2++) {
+            var target2 = normalizeNoDiacritics(candidates[c2]);
+            for (var j = 0; j < normHeader.length; j++) {
+                if (normHeader[j].indexOf(target2) !== -1) return j;
+            }
+        }
+        return -1;
+    }
+
+    function formatDateDDMMYYYY(val) {
+        if (val instanceof Date && !isNaN(val.getTime())) {
+            var dd = String(val.getDate()).padStart(2, '0');
+            var mm = String(val.getMonth() + 1).padStart(2, '0');
+            var yyyy = val.getFullYear();
+            return dd + mm + yyyy;
+        }
+        var s = String(val || '').trim();
+        var m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (m) return m[1].padStart(2, '0') + m[2].padStart(2, '0') + m[3];
+        var m2 = s.match(/^(\d{4})$/);
+        if (m2) return m2[1];
+        return onlyDigits(s);
+    }
+
+    /**
+     * Parse workbook -> mang cac benh nhan.
+     * @returns {Array<{stt, hoTen, cccd, ngaySinhDDMMYYYY, ngaySinhDisplay, gioiTinh, raw}>}
+     */
+    function parsePatientsFromWorkbook(wb) {
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+        if (!rows.length) return [];
+
+        var header = rows[0];
+        var idxHoTen = findColumnIndex(header, ['Ho Ten', 'Ho ten', 'Ho va Ten']);
+        var idxCCCD  = findColumnIndex(header, ['Dinh Danh Ca Nhan', 'CCCD', 'So CCCD', 'CMND']);
+        var idxDob   = findColumnIndex(header, ['Ngay Sinh', 'Ngay sinh']);
+        var idxGioiTinh = findColumnIndex(header, ['Gioi Tinh', 'Gioi tinh']);
+        var idxStt   = findColumnIndex(header, ['Stt']);
+
+        var patients = [];
+        for (var r = 1; r < rows.length; r++) {
+            var row = rows[r];
+            if (!row || row.every(function(c) { return c === '' || c == null; })) continue;
+
+            var hoTen = idxHoTen >= 0 ? String(row[idxHoTen] || '').trim() : '';
+            var cccdRaw = idxCCCD >= 0 ? row[idxCCCD] : '';
+            var cccd = onlyDigits(cccdRaw);
+            var dobRaw = idxDob >= 0 ? row[idxDob] : '';
+            var dobDisplay = (dobRaw instanceof Date) ?
+                (String(dobRaw.getDate()).padStart(2,'0') + '/' + String(dobRaw.getMonth()+1).padStart(2,'0') + '/' + dobRaw.getFullYear()) :
+                String(dobRaw || '');
+
+            if (!hoTen && !cccd) continue;
+
+            patients.push({
+                stt: idxStt >= 0 ? row[idxStt] : (r),
+                hoTen: hoTen,
+                cccd: cccd,
+                ngaySinhDDMMYYYY: formatDateDDMMYYYY(dobRaw),
+                ngaySinhDisplay: dobDisplay,
+                gioiTinh: idxGioiTinh >= 0 ? String(row[idxGioiTinh] || '') : '',
+                rowIndex: r,
+            });
+        }
+        return patients;
+    }
+
+    /* ======================================================================
+     *  PHAN 4: DOM ACTIONS - TUONG TAC VOI TRANG MEDINET
+     * ====================================================================== */
+
+    /** Tim element bang text noi dung (khong phan biet hoa thuong/dau), trong 1 danh sach selector. */
+    function findByText(selector, text) {
+        var nodes = document.querySelectorAll(selector);
+        var target = normalizeNoDiacritics(text);
+        for (var i = 0; i < nodes.length; i++) {
+            var t = normalizeNoDiacritics(nodes[i].textContent);
+            if (t === target || t.indexOf(target) !== -1) return nodes[i];
+        }
+        return null;
+    }
+
+    /** Kich hoat click "that" tren mot element (mousedown+mouseup+click) - than thien voi DevExtreme/Angular. */
+    function fireClick(el) {
+        if (!el) return false;
+        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function(type) {
+            try {
+                el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: _pageWin }));
+            } catch (e) {}
+        });
+        // Lop bao hiem cuoi: goi THANG phuong thuc click() native cua chinh phan tu DOM.
+        // Day la cach DUY NHAT dam bao 100% dung "realm" cua trang web, bat ke script
+        // co dang chay trong sandbox cua Tampermonkey hay khong, vi no khong can tao
+        // moi bat ky doi tuong Event nao ca - trinh duyet tu lo viec do.
+        try { el.click(); } catch (e) {}
+        return true;
+    }
+
+    /** Set gia tri input theo cach React/Angular nhan dien duoc (qua native setter) roi fire event. */
+    function setInputValue(input, value) {
+        var proto = _pageWin.HTMLInputElement.prototype;
+        var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+        input.focus();
+        if (desc && desc.set) {
+            desc.set.call(input, value);
+        } else {
+            input.value = value;
+        }
+        // DevExtreme/Angular co the lang nghe ca input/change va key events de debounce search
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'a' }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    /** Click vao Tab "Danh sach" (DevExtreme dx-tabs). */
+    function clickDanhSachTab() {
+        var tab = findByText('.dx-tab-content, .dx-item-content.dx-tab-content', 'Danh sách');
+        if (!tab) {
+            console.warn('[Upload ảnh hàng loạt] Không tìm thấy phần tử Tab "Danh sách" trên trang (findByText trả về null).');
+            return false;
+        }
+        var clickable = tab.closest('.dx-tab') || tab;
+        var ok = fireClick(clickable);
+        console.log('[Upload ảnh hàng loạt] Đã thử click Tab "Danh sách":', clickable, '-> fireClick trả về', ok);
+        return ok;
+    }
+
+    /**
+     * Lay container cua TAB DANG ACTIVE trong dx-tab-panel (Chi tiet / Danh sach / Lich su).
+     * Dua vao cau truc thuc te: moi tab la 1 the <div class="dx-item dx-multiview-item ...">
+     *   - Tab dang chon: co class "dx-item-selected"
+     *   - Tab khong chon: co class "dx-multiview-item-hidden" VA aria-hidden="true"
+     * Khong dung offsetParent de kiem tra an/hien vi tab an dung transform (van co the
+     * tinh la "visible" theo offsetParent ngay ca khi bi day ra ngoai man hinh).
+     */
+    function getActiveTabPanelContainer() {
+        var selected = document.querySelector('.dx-multiview-item.dx-item-selected');
+        if (selected) return selected;
+        // fallback: tab khong co aria-hidden=true
+        var allTabs = document.querySelectorAll('.dx-multiview-item');
+        for (var i = 0; i < allTabs.length; i++) {
+            if (allTabs[i].getAttribute('aria-hidden') !== 'true') return allTabs[i];
+        }
+        return null;
+    }
+
+    /**
+     * Lay o tim kiem CCCD CUA TAB DANG ACTIVE (vi du tab "Danh sach").
+     * Quan trong: tab "Chi tiet" CUNG co 1 o tim kiem giong cau truc (dx-text-box
+     * mode="search"), nhung khong dung cho nhu cau nay. Phai gioi han pham vi tim
+     * kiem CHI trong container cua tab dang active, khong tim toan trang.
+     */
+    function getGridSearchInput() {
+        var activeTab = getActiveTabPanelContainer();
+        if (!activeTab) return null;
+
+        // Trong pham vi tab active, tim dx-text-box co mode="search" (placeholder "Tìm kiếm...")
+        var searchBox = activeTab.querySelector('dx-text-box[mode="search"], dx-text-box.dx-searchbox');
+        if (searchBox) {
+            var inp = searchBox.querySelector('input.dx-texteditor-input');
+            if (inp) return inp;
+        }
+
+        // Fallback trong pham vi tab active: bat ky input dx-texteditor-input dau tien
+        var anyInput = activeTab.querySelector('input.dx-texteditor-input');
+        if (anyInput) return anyInput;
+
+        return null;
+    }
+
+    /** Kiem tra tab "Danh sach" co dang la tab active khong (dung de xac nhan truoc khi tim kiem). */
+    function isDanhSachTabActive() {
+        var activeTab = getActiveTabPanelContainer();
+        if (!activeTab) return false;
+        // Tab "Danh sach" la tab co dx-data-grid voi card ket qua (khac voi tab "Chi tiet" co dx-tree-view)
+        return !!activeTab.querySelector('dx-data-grid');
+    }
+
+    /** Nhap CCCD vao o tim kiem grid. Tra ve true/false de biet co thuc su nhap duoc khong. */
+    function typeSearchCCCD(cccd) {
+        var input = getGridSearchInput();
+        if (!input) return false;
+        input.focus();
+        setInputValue(input, cccd);
+        // Xac nhan gia tri da duoc set thanh cong
+        return input.value === cccd;
+    }
+
+    /** Xoa noi dung o tim kiem sidebar (click nut X NGAY BEN TRONG o do, khong phai bat ky dau tren trang). */
+    function clearGridSearch() {
+        var input = getGridSearchInput();
+        if (!input) return false;
+
+        // Tim nut Clear (X) nam trong CUNG container cha truc tiep cua input nay
+        var box = input.closest('dx-text-box') || input.closest('.dx-textbox');
+        if (box) {
+            var clearBtn = box.querySelector('.dx-icon-clear');
+            if (clearBtn && clearBtn.offsetParent !== null) {
+                fireClick(clearBtn);
+                return true;
+            }
+        }
+        // Fallback: set rong truc tiep
+        setInputValue(input, '');
+        return true;
+    }
+
+    /** Lay danh sach cac dong du lieu hien dang hien trong grid (sau filter), CHI trong tab dang active. */
+    function getGridDataRows() {
+        var activeTab = getActiveTabPanelContainer();
+        var scope = activeTab || document;
+        return Array.prototype.slice.call(
+            scope.querySelectorAll('.dx-data-row:not(.dx-freespace-row)')
+        ).filter(function(row) {
+            return row.querySelectorAll('td').length > 0;
+        });
+    }
+
+    /** Doi grid filter ra dung 1 dong ket qua khop voi CCCD, roi click vao no. */
+    function waitAndClickSearchResult(cccd) {
+        return waitFor(function() {
+            var rows = getGridDataRows();
+            // Chi tinh nhung dong co chua CCCD dang tim (tranh dong "khong co du lieu")
+            var matchingRows = rows.filter(function(r) {
+                return r.textContent.indexOf(cccd) !== -1;
+            });
+            if (matchingRows.length >= 1) return matchingRows;
+            return null;
+        }, CONFIG.MAX_WAIT_SEARCH_RESULT, 200).then(function(matchingRows) {
+            if (matchingRows.length > 1) {
+                throw new Error('__MULTI_RESULT__');
+            }
+            var row = matchingRows[0];
+            var clickTarget = row.querySelector('.dx-template-wrapper') || row.querySelector('td') || row;
+            var ok = fireClick(clickTarget);
+            console.log('[Upload ảnh hàng loạt] Đã thử click dòng kết quả CCCD ' + cccd + ':', clickTarget, '-> fireClick trả về', ok);
+            return true;
+        });
+    }
+
+    /** Kiem tra grid (trong tab active) co bao "Khong co du lieu" hay khong. */
+    function gridHasNoData() {
+        var activeTab = getActiveTabPanelContainer();
+        var scope = activeTab || document;
+        var noDataEl = scope.querySelector('.dx-datagrid-nodata');
+        return !!(noDataEl && !noDataEl.classList.contains('dx-hidden') && noDataEl.textContent.trim().length > 0);
+    }
+
+    /** Tim icon camera (vung upload anh) tren form chi tiet benh nhan. */
+    function findCameraUploadIcon() {
+        var icon = document.querySelector('hfileupload .avatar-overlay i.fa-camera, hfileupload i.fa-camera');
+        if (icon && icon.offsetParent !== null) return icon;
+        // fallback: bat ky icon camera nao dang hien
+        var all = document.querySelectorAll('i.fa-camera, i.fas.fa-camera');
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].offsetParent !== null) return all[i];
+        }
+        return null;
+    }
+
+    /** Kiem tra benh nhan da co anh dai dien hay chua (avatar khac default). */
+    function patientAlreadyHasPhoto() {
+        var img = document.querySelector('hfileupload .avatar-container img, hfileupload img');
+        if (!img) return false;
+        var src = img.getAttribute('src') || '';
+        if (!src) return false;
+        if (src.indexOf('default') !== -1 || src.indexOf('no-image') !== -1 || src.indexOf('no_image') !== -1) return false;
+        return true;
+    }
+
+    /** Tim input[type=file] thuc su (cua dx-fileuploader), bo qua input "noi bo" (data-medinet-internal) cua CA 2 che do. */
+    function findNativeFileInput() {
+        var all = document.querySelectorAll('input[type="file"]');
+        for (var i = 0; i < all.length; i++) {
+            var el = all[i];
+            if (el.dataset.medinetInternal) continue;
+            if (el === _folderInput) continue;
+            if (window.__medinetUpload && window.__medinetUpload.hiddenInputs.has(el)) continue;
+            if (el.closest('.dx-fileuploader-input-wrapper') || el.classList.contains('dx-fileuploader-input')) {
+                return el;
+            }
+        }
+        for (var j = 0; j < all.length; j++) {
+            if (all[j].dataset.medinetInternal) continue;
+            if (all[j] === _folderInput) continue;
+            if (window.__medinetUpload && window.__medinetUpload.hiddenInputs.has(all[j])) continue;
+            return all[j];
+        }
+        return null;
+    }
+
+    /** Inject 1 File vao input file cua dx-fileuploader, kich hoat upload. */
+    function injectFileIntoInput(nativeInput, file) {
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files');
+            if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(nativeInput, dt.files);
+            } else {
+                nativeInput.files = dt.files;
+            }
+            ['input', 'change'].forEach(function(evName) {
+                nativeInput.dispatchEvent(new Event(evName, { bubbles: true, cancelable: true }));
+            });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /** Click icon camera de mo file picker thuc (dung de nguoi dung dung thu cong; khong dung trong auto-loop). */
+    function clickCameraIcon() {
+        var icon = findCameraUploadIcon();
+        return fireClick(icon);
+    }
+
+    /** Tim nut "Luu thay doi" va click. */
+    function clickSaveButton() {
+        var btn = findByText('span.dx-button-text', 'Lưu thay đổi');
+        if (!btn) return false;
+        var clickable = btn.closest('.dx-button') || btn;
+        return fireClick(clickable);
+    }
+
+    /** Doi form chi tiet benh nhan load xong (dua vao xuat hien vung upload anh + 1 input Ho Ten co gia tri). */
+    function waitForDetailFormLoaded() {
+        return waitFor(function() {
+            var camIcon = findCameraUploadIcon();
+            var hasForm = document.querySelector('.NgaySinh, hfileupload');
+            return (camIcon && hasForm) ? true : null;
+        }, CONFIG.MAX_WAIT_FORM_LOAD, 200);
+    }
+
+    /**
+     * Theo doi KET QUA THUC SU cua hanh dong "Luu thay doi" bang cach quan sat DOM
+     * (MutationObserver) de bat thong bao thanh cong/loi cua CHINH HE THONG MediNet
+     * (toast, snackbar, popup canh bao thieu truong bat buoc, v.v...), thay vi chi
+     * doan qua viec loading bar bien mat (cach cu - khong biet he thong co thuc su
+     * luu thanh cong hay khong, chi biet la "het loading").
+     *
+     * QUAN TRONG: phai goi ham nay va gan observer TRUOC khi bam nut "Luu thay doi",
+     * de khong bo lot thong bao xuat hien rat nhanh ngay sau click.
+     *
+     * Day la co che heuristic (do tu dong tim chu khoa trong cac node DOM moi duoc
+     * them vao trang), vi khong co thong tin chinh xac ve cau truc thong bao thuc te
+     * cua he thong. Neu van con sot/bat nham, can cung cap HTML/class cu the cua
+     * thong bao do (xem qua DevTools) de tinh chinh lai danh sach selector/chu khoa.
+     *
+     * @returns {{promise: Promise<{confirmed:boolean, success:boolean|null, message:string}>, cancel: function}}
+     *   confirmed=true: da bat duoc 1 thong bao ro rang (thanh cong hoac loi) tu he thong.
+     *   confirmed=false: khong bat duoc gi ro rang trong thoi gian cho -> coi nhu "khong chac",
+     *   noi goi nen fallback ve hanh vi cu (gia dinh thanh cong neu loading bar da het).
+     */
+    function watchSaveOutcome() {
+        // Cac id thuoc UI CUA CHINH SCRIPT NAY - phai loai tru, neu khong toast cua
+        // script (vd showToast bao "Lỗi khi gắn ảnh...") se bi hieu nham la thong bao
+        // cua he thong MediNet.
+        var OWN_UI_IDS = ['medinet-auto-panel', '_medinet_toast'];
+        // Cum tu cho biet LUU THAT BAI (vi du: thieu truong bat buoc). Dung cum tu
+        // nhieu chu (khong dung tu "lỗi" don le) de giam nguy co bat nham van ban
+        // khong lien quan.
+        var FAIL_PHRASES = [
+            'không thành công', 'thất bại', 'không hợp lệ', 'vui lòng nhập',
+            'vui lòng chọn', 'vui lòng điền', 'vui lòng kiểm tra', 'bắt buộc',
+            'chưa nhập', 'chưa điền', 'còn thiếu', 'thiếu thông tin', 'có lỗi xảy ra',
+        ];
+        var SUCCESS_PHRASES = ['lưu thành công', 'cập nhật thành công', 'thành công'];
+
+        function isOwnUI(node) {
+            if (!node || node.nodeType !== 1) return true; // bo qua text/comment node
+            for (var i = 0; i < OWN_UI_IDS.length; i++) {
+                if (node.id === OWN_UI_IDS[i]) return true;
+                if (typeof node.closest === 'function' && node.closest('#' + OWN_UI_IDS[i])) return true;
+            }
+            return false;
+        }
+
+        function classify(text) {
+            var t = text.toLowerCase();
+            var i;
+            for (i = 0; i < FAIL_PHRASES.length; i++) {
+                if (t.indexOf(FAIL_PHRASES[i]) !== -1) return false;
+            }
+            for (i = 0; i < SUCCESS_PHRASES.length; i++) {
+                if (t.indexOf(SUCCESS_PHRASES[i]) !== -1) return true;
+            }
+            return null;
+        }
+
+        var done = false;
+        var result = { confirmed: false, success: null, message: '' };
+        var observer = null;
+
+        var promise = new Promise(function(resolve) {
+            function finish() {
+                if (done) return;
+                done = true;
+                if (observer) { try { observer.disconnect(); } catch (e) {} }
+                resolve(result);
+            }
+
+            observer = new MutationObserver(function(mutations) {
+                for (var m = 0; m < mutations.length; m++) {
+                    var added = mutations[m].addedNodes;
+                    for (var n = 0; n < added.length; n++) {
+                        var node = added[n];
+                        if (isOwnUI(node)) continue;
+                        var text = (node.innerText || node.textContent || '').trim();
+                        // Bo qua khoi text qua dai (chac chan khong phai 1 toast/thong bao ngan)
+                        if (!text || text.length > 300) continue;
+                        var verdict = classify(text);
+                        if (verdict === null) continue;
+                        result.confirmed = true;
+                        result.success = verdict;
+                        result.message = text.slice(0, 200);
+                        finish();
+                        return;
+                    }
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            // Cho 1 khoang de loading bar (neu co) kip xuat hien truoc khi bat dau
+            // kiem tra xem nguoc lai - rang bar da bien mat hay chua.
+            setTimeout(function() {
+                if (done) return;
+                var deadline = Date.now() + CONFIG.MAX_WAIT_SAVE_DONE;
+                (function poll() {
+                    if (done) return;
+                    var bar = document.querySelector('mat-progress-bar[mode="indeterminate"]');
+                    var barGone = (!bar || bar.offsetParent === null);
+                    if (barGone || Date.now() > deadline) {
+                        // Cho them 1 chut de thong bao (neu co) kip duoc MutationObserver bat
+                        setTimeout(finish, 500);
+                        return;
+                    }
+                    setTimeout(poll, 200);
+                })();
+            }, CONFIG.DELAY_AFTER_SAVE_CLICK);
+        });
+
+        return {
+            promise: promise,
+            cancel: function() {
+                if (done) return;
+                done = true;
+                if (observer) { try { observer.disconnect(); } catch (e) {} }
+            },
+        };
+    }
+
+    /* ======================================================================
+     *  PHAN 5: GHI LOG
+     * ====================================================================== */
+
+    function addLog(patient, ketQua, lyDo, tenAnh, sttHangDoi) {
+        STATE.logs.push({
+            sttHangDoi: sttHangDoi,   // thu tu trong hang doi DA LOC (1, 2, 3... ung voi thanh tien trinh)
+            stt: patient.stt,         // so thu tu GOC trong file Excel (co the khong lien tuc vi da bi loc)
+            hoTen: patient.hoTen,
+            cccd: patient.cccd,
+            ngaySinh: patient.ngaySinhDisplay || patient.ngaySinhDDMMYYYY,
+            ketQua: ketQua,           // Thanh cong | Bo qua | Loi
+            lyDo: lyDo || '',
+            anhDaDung: tenAnh || '',
+            thoiGian: new Date().toLocaleString('vi-VN'),
+        });
+        renderLogTable();
+        updateStatsUI();
+    }
+
+    function exportLogToExcel() {
+        if (!STATE.logs.length) { showToast('Chưa có log nào để xuất', 'warn'); return; }
+        var rows = STATE.logs.map(function(l) {
+            return {
+                '#': l.sttHangDoi,
+                'STT (Excel)': l.stt,
+                'Họ Tên': l.hoTen,
+                'CCCD': l.cccd,
+                'Ngày Sinh': l.ngaySinh,
+                'Kết Quả': l.ketQua,
+                'Lý Do': l.lyDo,
+                'Ảnh Đã Dùng': l.anhDaDung,
+                'Thời Gian': l.thoiGian,
+            };
+        });
+        var ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [
+            { wch: 6 }, { wch: 10 }, { wch: 28 }, { wch: 14 }, { wch: 12 },
+            { wch: 12 }, { wch: 36 }, { wch: 30 }, { wch: 20 },
+
+        ];
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Log Upload Anh');
+        var filename = 'Log_Upload_Anh_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.xlsx';
+        XLSX.writeFile(wb, filename);
+        showToast('Đã xuất file: ' + filename, 'success');
+    }
+
+    /* ======================================================================
+     *  PHAN 6: XU LY 1 BENH NHAN (1 BUOC TRONG VONG LAP)
+     * ====================================================================== */
+
+    /**
+     * Xu ly toan bo flow cho 1 benh nhan:
+     * Tab Danh sach -> go CCCD -> doi 1 ket qua -> click -> doi form load
+     * -> kiem tra da co anh? -> tim anh khop -> inject -> Luu -> doi luu xong
+     * -> quay lai Tab Danh sach -> xoa search
+     *
+     * @returns {Promise<{ketQua:string, lyDo:string, anhDaDung:string}>}
+     */
+    function processOnePatient(patient) {
+        return Promise.resolve().then(function() {
+            return checkPauseOrStop();
+        }).then(function() {
+            if (!patient.cccd || patient.cccd.length < 9) {
+                throw { skip: true, reason: 'CCCD không hợp lệ hoặc trống' };
+            }
+
+            // 1. Dam bao dang o Tab Danh sach - click roi CHO XAC NHAN da chuyen tab
+            //    thanh cong. THU LAI toi da 3 lan (phong truong hop lan dau DOM
+            //    chua kip phan hoi/click bi "rot").
+            return (function tryClickTab(attemptsLeft) {
+                clickDanhSachTab();
+                return waitFor(function() {
+                    return isDanhSachTabActive() ? true : null;
+                }, 1800, 150).catch(function() {
+                    if (attemptsLeft > 1) {
+                        console.warn('[Upload ảnh hàng loạt] Tab "Danh sách" chưa active sau khi click, thử lại... (còn ' + (attemptsLeft - 1) + ' lần)');
+                        return tryClickTab(attemptsLeft - 1);
+                    }
+                    console.error('[Upload ảnh hàng loạt] Đã thử 3 lần nhưng KHÔNG chuyển được sang tab "Danh sách". Kiểm tra xem trang có đúng cấu trúc dx-tabs không, hoặc DevExtreme có đang bận xử lý việc khác không.');
+                    throw { error: true, reason: 'Không chuyển được sang tab "Danh sách"' };
+                });
+            })(3);
+        }).then(function() {
+            return sleep(300); // cho UI render xong sau khi tab active
+        }).then(function() {
+            return checkPauseOrStop();
+        }).then(function() {
+            // 2. Xoa o tim kiem truoc (de tranh dinh ket qua cu), roi go CCCD moi
+            clearGridSearch();
+            return sleep(300);
+        }).then(function() {
+            var ok = typeSearchCCCD(patient.cccd);
+            if (!ok) throw { error: true, reason: 'Không tìm thấy ô tìm kiếm danh sách' };
+            return sleep(CONFIG.DELAY_AFTER_SEARCH_INPUT);
+        }).then(function() {
+            return checkPauseOrStop();
+        }).then(function() {
+            // 3. Doi ket qua filter & click vao dong duy nhat
+            if (gridHasNoData()) {
+                throw { skip: true, reason: 'Không tìm thấy bệnh nhân với CCCD này trong hệ thống' };
+            }
+            return waitAndClickSearchResult(patient.cccd);
+        }).catch(function(err) {
+            if (err && err.message === '__MULTI_RESULT__') {
+                throw { error: true, reason: 'Tìm thấy nhiều hơn 1 kết quả trùng CCCD - bỏ qua để an toàn' };
+            }
+            if (err && err.skip) throw err;
+            if (err && err.error) throw err;
+            throw { error: true, reason: 'Không tìm thấy kết quả khớp CCCD trong danh sách (timeout)' };
+        }).then(function() {
+            return sleep(CONFIG.DELAY_AFTER_ROW_CLICK);
+        }).then(function() {
+            return checkPauseOrStop();
+        }).then(function() {
+            // 4. Doi form chi tiet load xong
+            return waitForDetailFormLoaded().catch(function() {
+                throw { error: true, reason: 'Không tải được form chi tiết bệnh nhân (timeout)' };
+            });
+        }).then(function() {
+            return checkPauseOrStop();
+        }).then(function() {
+            // 5. Kiem tra co can bo qua vi da co anh (neu khong tick "ghi de")
+            if (!STATE.overwriteExisting && patientAlreadyHasPhoto()) {
+                throw { skip: true, reason: 'Bệnh nhân đã có ảnh sẵn (không ghi đè)' };
+            }
+
+            // 6. Tim anh khop
+            var matched = findMatchingPhoto(patient, STATE.photoMap);
+            if (!matched) {
+                throw { skip: true, reason: 'Không tìm thấy ảnh khớp Họ Tên / Ngày Sinh / CCCD trong thư mục' };
+            }
+
+            // 7. Inject anh vao input file thuc
+            var nativeInput = findNativeFileInput();
+            if (!nativeInput) {
+                throw { error: true, reason: 'Không tìm thấy ô upload ảnh trên form (input file)' };
+            }
+            var injected = injectFileIntoInput(nativeInput, matched);
+            if (!injected) {
+                throw { error: true, reason: 'Lỗi khi gắn file ảnh vào ô upload' };
+            }
+            return sleep(CONFIG.DELAY_AFTER_PHOTO_MATCH).then(function() {
+                return matched.name;
+            });
+        }).then(function(anhDaDung) {
+            return checkPauseOrStop().then(function() { return anhDaDung; });
+        }).then(function(anhDaDung) {
+            // 8. GAN THEO DOI KET QUA TRUOC, roi moi bam "Luu thay doi" - thu tu nay
+            //    bat buoc phai dung nhu vay de khong bo lot thong bao xuat hien
+            //    ngay sau click (xem watchSaveOutcome()).
+            var watcher = watchSaveOutcome();
+            var savedOk = clickSaveButton();
+            if (!savedOk) {
+                watcher.cancel();
+                throw { error: true, reason: 'Không tìm thấy nút "Lưu thay đổi"' };
+            }
+            return watcher.promise.then(function(saveResult) {
+                if (saveResult.confirmed && saveResult.success === false) {
+                    // He thong (MediNet) tu bao luu KHONG thanh cong (vd: thieu truong
+                    // bat buoc) - truoc day script bo qua thong bao nay va bao nham
+                    // la "Thanh cong". Gio coi day la 1 loi can xem lai thu cong.
+                    throw {
+                        error: true,
+                        reason: 'Hệ thống báo lưu KHÔNG thành công' + (saveResult.message ? (': ' + saveResult.message) : ' (có thể do thiếu thông tin bắt buộc trên trang)'),
+                    };
+                }
+                return { ketQua: 'Thành công', lyDo: 'Đã khớp và upload ảnh thành công', anhDaDung: anhDaDung };
+            });
+        }).catch(function(err) {
+            if (err && err.message === '__STOPPED__') throw err;
+            if (err && err.skip) {
+                return { ketQua: 'Bỏ qua', lyDo: err.reason, anhDaDung: '' };
+            }
+            if (err && err.error) {
+                return { ketQua: 'Lỗi', lyDo: err.reason, anhDaDung: '' };
+            }
+            // Gop chung vao "Lỗi" (truoc day la muc rieng "Thất bại" - chi la 1
+            // nhanh du phong cho loi JS khong luong truoc, gop lai cho gon).
+            return { ketQua: 'Lỗi', lyDo: 'Lỗi không xác định: ' + ((err && err.message) ? err.message : String(err)), anhDaDung: '' };
+        }).then(function(result) {
+            // 9. Quay lai Tab Danh sach, xoa o tim kiem - chuan bi cho benh nhan tiep theo
+            return Promise.resolve().then(function() {
+                clickDanhSachTab();
+                return waitFor(function() {
+                    return isDanhSachTabActive() ? true : null;
+                }, 5000, 150).catch(function() { return true; }); // du khong xac nhan duoc van tiep tuc
+            }).then(function() {
+                return sleep(300);
+            }).then(function() {
+                clearGridSearch();
+                return sleep(CONFIG.DELAY_AFTER_CLEAR_SEARCH);
+            }).then(function() {
+                return result;
+            }).catch(function() {
+                return result; // du don dep loi, van tra ve ket qua chinh
+            });
+        });
+    }
+
+    /* ======================================================================
+     *  PHAN 7: VONG LAP CHINH (DUYET TOAN BO DANH SACH)
+     * ====================================================================== */
+
+    function runMainLoop() {
+        STATE.status = 'running';
+        STATE.stopRequested = false;
+        STATE.pauseRequested = false;
+        updateStatusUI();
+
+        var startIndex = STATE.currentIndex >= 0 ? STATE.currentIndex : 0;
+
+        function loopFrom(i) {
+            if (i >= STATE.queue.length) {
+                STATE.status = 'done';
+                STATE.currentIndex = -1;
+                if (window.__medinetUpload) window.__medinetUpload.batchActive = false;
+                updateProgressUI(STATE.queue.length - 1, STATE.queue.length); // chot dung 100%
+                UI.currentPatientBox.classList.remove('show');
+                updateStatusUI();
+                showToast(
+                    STATE.includeUnmatched
+                        ? 'Hoàn tất! Đã xử lý ' + STATE.queue.length + ' bệnh nhân (toàn bộ danh sách).'
+                        : 'Hoàn tất! Đã xử lý ' + STATE.queue.length + ' bệnh nhân có ảnh khớp.',
+                    'success'
+                );
+                return Promise.resolve();
+            }
+
+            return checkPauseOrStop().then(function() {
+                STATE.currentIndex = i;
+                var patient = STATE.queue[i];
+                updateProgressUI(i);
+
+                return processOnePatient(patient).then(function(result) {
+                    addLog(patient, result.ketQua, result.lyDo, result.anhDaDung, i + 1);
+                    return loopFrom(i + 1);
+                });
+            }).catch(function(err) {
+                if (err && err.message === '__STOPPED__') {
+                    var patient = STATE.queue[i];
+                    addLog(patient, 'Bỏ qua', 'Đã dừng theo yêu cầu người dùng', '', i + 1);
+                    STATE.status = 'stopped';
+                    if (window.__medinetUpload) window.__medinetUpload.batchActive = false;
+                    updateStatusUI();
+                    showToast('Đã dừng tiến trình.', 'warn');
+                    return;
+                }
+                // Loi khong luong truoc -> ghi log Loi va tiep tuc dong tiep theo
+                var patient2 = STATE.queue[i];
+                addLog(patient2, 'Lỗi', 'Lỗi không xác định: ' + (err && err.message ? err.message : String(err)), '', i + 1);
+                return loopFrom(i + 1);
+            });
+        }
+
+        return loopFrom(startIndex);
+    }
+
+    /**
+     * Xay dung STATE.queue:
+     * - Mac dinh (STATE.includeUnmatched = false): chi giu lai cac benh nhan
+     *   TRONG STATE.rows MA co tim thay anh khop trong STATE.photoMap. Nhung
+     *   benh nhan khong co anh khop se KHONG duoc dua vao vong lap (khong
+     *   tinh vao tien trinh, khong ghi log) vi thuc hien chac chan se khong
+     *   thanh cong.
+     * - Khi STATE.includeUnmatched = true (tuy chon "Bao gồm BN chưa có ảnh"):
+     *   giu lai TOAN BO STATE.rows, ke ca benh nhan chua co anh khop. Dung khi
+     *   can ra soat/thong ke toan dien: vi processOnePatient() van tim kiem
+     *   CCCD tren he thong TRUOC khi kiem tra anh, nen cac benh nhan nay van
+     *   se duoc tim/mo tren he thong va duoc ghi log day du - nho do phat hien
+     *   duoc ai chua co anh (log "Bỏ qua") VA ai bi trung ket qua tim kiem
+     *   CCCD / 2 dong trung thong tin (log "Lỗi" - xem __MULTI_RESULT__).
+     */
+    function buildFilteredQueue() {
+        if (STATE.includeUnmatched) {
+            STATE.queue = STATE.rows.slice();
+        } else {
+            STATE.queue = STATE.rows.filter(function(patient) {
+                return !!findMatchingPhoto(patient, STATE.photoMap);
+            });
+        }
+        return STATE.queue;
+    }
+
+    function startAutomation() {
+        if (!STATE.rows.length) { showToast('Vui lòng tải file Excel danh sách bệnh nhân trước', 'warn'); return; }
+        if (!STATE.photoMap || STATE.photoMap.size === 0) { showToast('Vui lòng chọn thư mục ảnh trước', 'warn'); return; }
+        if (STATE.status === 'running') return;
+
+        if (STATE.status === 'paused' && STATE.resolvePause) {
+            // Dang resume sau khi tam ngung: batchActive van con true tu lan
+            // bat dau truoc do, khong can gan lai.
+            STATE.pauseRequested = false;
+            var fn = STATE.resolvePause;
+            STATE.resolvePause = null;
+            fn();
+            return;
+        }
+
+        var queue = buildFilteredQueue();
+        if (!queue.length) {
+            showToast(STATE.includeUnmatched ? 'File Excel không có bệnh nhân nào để xử lý' : 'Không có bệnh nhân nào có ảnh khớp trong thư mục để xử lý', 'warn');
+            return;
+        }
+        showToast(
+            STATE.includeUnmatched
+                ? 'Sẽ xử lý TOÀN BỘ ' + queue.length + ' bệnh nhân (bao gồm cả BN chưa có ảnh)'
+                : 'Sẽ xử lý ' + queue.length + ' / ' + STATE.rows.length + ' bệnh nhân có ảnh khớp',
+            'success'
+        );
+
+        // QUAN TRONG: chi DEN DAY moi chac chan vong lap se thuc su chay, nen
+        // moi tat che do "Upload anh thong minh" (don le) va bao cho no biet
+        // "hang loat" dang chay, de listener click cua che do don le KHONG
+        // cuop mat cac click tu dong cua vong lap nay.
+        if (window.__medinetUpload) {
+            window.__medinetUpload.batchActive = true;
+            if (typeof window.__medinetUpload.disableSingleMode === 'function') {
+                try { window.__medinetUpload.disableSingleMode(); } catch (e) {}
+            }
+        }
+
+        STATE.logs = [];
+        renderLogTable();
+        STATE.currentIndex = 0;
+        runMainLoop().catch(function() {
+            // Luoi an toan: du co loi gi khong luong truoc xay ra va thoat
+            // hang vong lap, van phai tra lai quyen cho che do "Upload anh
+            // thong minh" - khong de batchActive bi ket "true" mai mai.
+            if (window.__medinetUpload) window.__medinetUpload.batchActive = false;
+        });
+    }
+
+    function pauseAutomation() {
+        if (STATE.status !== 'running') return;
+        STATE.pauseRequested = true;
+        showToast('Sẽ tạm ngưng sau khi xử lý xong bệnh nhân hiện tại...', 'warn');
+    }
+
+    function stopAutomation() {
+        if (STATE.status === 'idle' || STATE.status === 'stopped') return;
+        STATE.stopRequested = true;
+        if (STATE.resolvePause) {
+            var fn = STATE.resolvePause;
+            STATE.resolvePause = null;
+            fn();
+        }
+        showToast('Đang dừng tiến trình...', 'warn');
+    }
+
+    /* ======================================================================
+     *  PHAN 8: PRE-CHECK - DOI CHIEU TRUOC GIUA EXCEL VA THU MUC ANH
+     * ====================================================================== */
+
+    var PRECHECK = {
+        totalPatients: 0,
+        totalPhotos: 0,
+        matchedCount: 0,
+        unmatchedCount: 0,
+        unmatchedList: [], // benh nhan khong tim thay anh
+    };
+
+    function runPrecheck() {
+        PRECHECK.totalPatients = STATE.rows.length;
+        PRECHECK.totalPhotos = STATE.photoMap ? STATE.photoMap.size : 0;
+        PRECHECK.matchedCount = 0;
+        PRECHECK.unmatchedCount = 0;
+        PRECHECK.unmatchedList = [];
+
+        if (!STATE.rows.length || !STATE.photoMap || STATE.photoMap.size === 0) {
+            updateStatsUI();
+            return;
+        }
+
+        STATE.rows.forEach(function(patient) {
+            var matched = findMatchingPhoto(patient, STATE.photoMap);
+            if (matched) {
+                PRECHECK.matchedCount++;
+            } else {
+                PRECHECK.unmatchedCount++;
+                PRECHECK.unmatchedList.push(patient);
+            }
+        });
+
+        updateStatsUI();
+    }
+
+    /* ======================================================================
+     *  PHAN 9: GIAO DIEN (UI PANEL)
+     * ====================================================================== */
+
+    var UI = {}; // luu tham chieu cac element de cap nhat nhanh
+
+    function injectStyles() {
+        var css = '\
+        #medinet-auto-panel * { box-sizing: border-box; }\
+        #medinet-auto-panel {\
+            position: fixed; top: 70px; right: 16px; width: 360px;\
+            background: #161616; border-radius: 14px; z-index: 2147483000;\
+            font-family: "Segoe UI", Roboto, Arial, sans-serif; font-size: 13px; color: #e6e6e6;\
+            box-shadow: 0 10px 30px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);\
+            max-height: 92vh; display: flex; flex-direction: column; overflow: hidden;\
+        }\
+        #medinet-auto-panel.collapsed .map-body { display: none; }\
+        #medinet-auto-panel.collapsed .map-mini-controls { display: flex; }\
+        .map-mini-controls { display: none; flex-direction: column; gap: 8px; padding: 10px 14px 14px; }\
+        .map-header {\
+            background: linear-gradient(135deg, #000000 0%, #232323 100%);\
+            color: #f5f5f5; padding: 12px 14px; cursor: move; display: flex;\
+            align-items: center; justify-content: space-between; flex-shrink: 0;\
+            border-bottom: 1px solid #2e2e2e;\
+        }\
+        .map-header-title {\
+            font-weight: 700; font-size: 13.5px; display:flex; align-items:center; gap:8px;\
+            flex: 1; min-width: 0; overflow: hidden; color: #f5f5f5;\
+        }\
+        .map-header-title-icon { flex-shrink: 0; }\
+        .map-header-title-text-wrap { overflow: hidden; flex: 1; min-width: 0; white-space: nowrap; position: relative; }\
+        .map-header-title-text { display: inline-block; white-space: nowrap; }\
+        .map-header-title-text-wrap.marquee .map-header-title-text {\
+            display: inline-block; padding-right: 40px;\
+            animation: map-marquee-scroll linear infinite;\
+        }\
+        @keyframes map-marquee-scroll {\
+            0% { transform: translateX(0); }\
+            100% { transform: translateX(-50%); }\
+        }\
+        .map-header-actions { display: flex; gap: 6px; }\
+        .map-icon-btn {\
+            background: rgba(255,255,255,0.12); border: none; color: #f0f0f0; width: 24px; height: 24px;\
+            border-radius: 6px; cursor: pointer; font-size: 13px; line-height: 1; display:flex; align-items:center; justify-content:center;\
+        }\
+        .map-icon-btn:hover { background: rgba(255,255,255,0.25); }\
+        .map-body { overflow-y: auto; padding: 12px 14px 14px; flex: 1; background: #161616; }\
+        .map-section { margin-bottom: 12px; }\
+        .map-section-title {\
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;\
+            color: #9a9a9a; margin-bottom: 6px; display:flex; align-items:center; gap:6px;\
+        }\
+        .map-row { display: flex; gap: 8px; margin-bottom: 8px; }\
+        .map-btn {\
+            flex: 1; border: none; border-radius: 8px; padding: 9px 10px; font-size: 12.5px;\
+            font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;\
+            transition: filter 0.15s, opacity 0.15s;\
+        }\
+        .map-btn:hover { filter: brightness(1.15); }\
+        .map-btn:disabled { opacity: 0.35; cursor: not-allowed; }\
+        .map-btn-primary { background: #3182ce; color: #fff; }\
+        .map-btn-secondary { background: #2a2a2a; color: #e6e6e6; border: 1px solid #3a3a3a; }\
+        .map-btn-success { background: #38a169; color: #fff; }\
+        .map-btn-warn { background: #dd6b20; color: #fff; }\
+        .map-btn-danger { background: #e53e3e; color: #fff; }\
+        .map-btn-outline { background: #1f1f1f; color: #63b3ed; border: 1px solid #2c5282; }\
+        .map-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }\
+        .map-stat-card {\
+            background: #1e1e1e; border-radius: 8px; padding: 8px 10px; border: 1px solid #333;\
+        }\
+        .map-stat-value { font-size: 17px; font-weight: 800; color: #f0f0f0; line-height: 1.1; }\
+        .map-stat-label { font-size: 10.5px; color: #9a9a9a; margin-top: 2px; }\
+        .map-stat-card.warn .map-stat-value { color: #f6ad55; }\
+        .map-stat-card.ok .map-stat-value { color: #68d391; }\
+        .map-progress-wrap { margin-top: 8px; }\
+        .map-progress-bar-bg { background: #2a2a2a; border-radius: 6px; height: 8px; overflow: hidden; }\
+        .map-progress-bar-fill { background: linear-gradient(90deg,#4299e1,#3182ce); height: 100%; width: 0%; transition: width 0.3s; }\
+        .map-progress-text { font-size: 11.5px; color: #c0c0c0; margin-top: 5px; display:flex; justify-content:space-between; }\
+        .map-status-pill {\
+            display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;\
+            padding: 3px 9px; border-radius: 20px;\
+        }\
+        .map-status-pill.idle { background:#2a2a2a; color:#b0b0b0; }\
+        .map-status-pill.running { background:#1c4532; color:#68d391; }\
+        .map-status-pill.paused { background:#7b341e; color:#fbd38d; }\
+        .map-status-pill.stopped { background:#742a2a; color:#feb2b2; }\
+        .map-status-pill.done { background:#2a4365; color:#90cdf4; }\
+        .map-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }\
+        .map-checkbox-row { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#dcdcdc; padding:6px 0; }\
+        .map-checkbox-row input { width:15px; height:15px; cursor:pointer; }\
+        .map-checkbox-hint { font-size:11px; color:#8a8a8a; line-height:1.4; padding-left:23px; margin-top:-2px; margin-bottom:6px; }\
+        .map-current-patient {\
+            background: #1a2c3d; border: 1px solid #2c5282; border-radius: 8px; padding: 8px 10px; font-size:12px; color:#90cdf4;\
+            margin-top:8px; display:none;\
+        }\
+        .map-current-patient.show { display:block; }\
+        .map-file-info { font-size: 11.5px; color: #b0b0b0; margin-top: 4px; }\
+        .map-log-table-wrap { max-height: 200px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; }\
+        table.map-log-table { width: 100%; border-collapse: collapse; font-size: 11px; }\
+        table.map-log-table th { background: #202020; text-align: left; padding: 6px 8px; position: sticky; top:0; color:#c0c0c0; font-weight:700;}\
+        table.map-log-table td { padding: 6px 8px; border-top: 1px solid #2a2a2a; vertical-align: top; color: #d8d8d8; }\
+        .map-tag { padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space:nowrap; }\
+        .map-tag.ok { background:#1c4532; color:#68d391; }\
+        .map-tag.skip { background:#2d2d2d; color:#b0b0b0; }\
+        .map-tag.err { background:#742a2a; color:#feb2b2; }\
+        .map-tag.fail { background:#7b341e; color:#fbd38d; }\
+        .map-empty-log { padding: 14px; text-align:center; color:#707070; font-size:12px; }\
+        .map-footer-btn-row { display:flex; gap:8px; margin-top:10px; }\
+        .map-divider { border-top: 1px solid #2a2a2a; margin: 10px 0; }\
+        .map-hint { font-size: 10.5px; color: #808080; margin-top: 4px; line-height:1.4; }\
+        \
+        /* ---- LAUNCHER (nut nho goc duoi phai, mo thang panel hang loat) ---- */\
+        #medinet-launcher-btn {\
+            position: fixed; bottom: 20px; right: 20px; z-index: 2147483000;\
+            background: linear-gradient(135deg, #000000 0%, #2a2a2a 100%);\
+            color: #f0f0f0; border: 1px solid #3a3a3a; border-radius: 10px;\
+            padding: 11px 18px; font-family: "Segoe UI", Roboto, Arial, sans-serif;\
+            font-size: 13px; font-weight: 700; cursor: pointer; display: flex;\
+            align-items: center; gap: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.5);\
+            transition: transform 0.15s, box-shadow 0.15s;\
+            white-space: nowrap;\
+        }\
+        #medinet-launcher-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,0.6); }\
+        #medinet-launcher-btn .map-launcher-icon { font-size: 15px; }\
+        ';
+        var style = document.createElement('style');
+        style.textContent = css;
+        document.head.appendChild(style);
+    }
+
+    function buildPanel() {
+        var panel = document.createElement('div');
+        panel.id = 'medinet-auto-panel';
+        panel.innerHTML = '\
+        <div class="map-header" id="map-drag-handle">\
+            <div class="map-header-title">\
+                <span class="map-header-title-icon">📋</span>\
+                <span class="map-header-title-text-wrap" id="map-title-wrap">\
+                    <span class="map-header-title-text" id="map-title-text">Auto Upload Ảnh Hàng Loạt (Hoàng Anh Jupiter)</span>\
+                </span>\
+            </div>\
+            <div class="map-header-actions">\
+                <button class="map-icon-btn" id="map-btn-collapse" title="Thu nhỏ">▁</button>\
+                <button class="map-icon-btn" id="map-btn-close-panel" title="Đóng">✕</button>\
+            </div>\
+        </div>\
+        <div class="map-mini-controls" id="map-mini-controls">\
+            <div style="display:flex; align-items:center; justify-content:space-between;">\
+                <span class="map-status-pill idle" id="map-status-pill-mini"><span class="map-dot"></span><span id="map-status-text-mini">Chưa chạy</span></span>\
+                <span class="map-progress-text" style="margin:0;"><span id="map-progress-text-left-mini">0 / 0</span>&nbsp;—&nbsp;<span id="map-progress-text-right-mini">0%</span></span>\
+            </div>\
+            <div class="map-progress-bar-bg"><div class="map-progress-bar-fill" id="map-progress-fill-mini"></div></div>\
+            <div class="map-current-patient" id="map-current-patient-mini" style="margin-top:0;"></div>\
+            <div class="map-row" style="margin-bottom:0;">\
+                <button class="map-btn map-btn-success" id="map-btn-start-mini">▶ Bắt đầu</button>\
+                <button class="map-btn map-btn-warn" id="map-btn-pause-mini" disabled>⏸ Tạm ngưng</button>\
+                <button class="map-btn map-btn-danger" id="map-btn-stop-mini" disabled>⏹ Dừng lại</button>\
+            </div>\
+        </div>\
+        <div class="map-body">\
+            <div class="map-section">\
+                <div class="map-section-title">① Dữ liệu nguồn</div>\
+                <div class="map-row">\
+                    <button class="map-btn map-btn-outline" id="map-btn-excel">📊 Tải file Excel</button>\
+                    <button class="map-btn map-btn-outline" id="map-btn-folder">🖼️ Chọn thư mục ảnh</button>\
+                </div>\
+                <div class="map-file-info" id="map-file-info">Chưa tải file Excel &nbsp;•&nbsp; Chưa chọn thư mục ảnh</div>\
+            </div>\
+\
+            <div class="map-section">\
+                <div class="map-section-title">② Thống kê đối chiếu</div>\
+                <div class="map-stats-grid">\
+                    <div class="map-stat-card"><div class="map-stat-value" id="stat-total-patients">0</div><div class="map-stat-label">Bệnh nhân trong Excel</div></div>\
+                    <div class="map-stat-card"><div class="map-stat-value" id="stat-total-photos">0</div><div class="map-stat-label">Ảnh trong thư mục</div></div>\
+                    <div class="map-stat-card ok"><div class="map-stat-value" id="stat-matched">0</div><div class="map-stat-label">Ảnh khớp dữ liệu</div></div>\
+                    <div class="map-stat-card warn"><div class="map-stat-value" id="stat-unmatched">0</div><div class="map-stat-label">Không khớp / thiếu ảnh</div></div>\
+                </div>\
+            </div>\
+\
+            <div class="map-section">\
+                <div class="map-section-title">③ Tùy chọn</div>\
+                <div class="map-checkbox-row">\
+                    <input type="checkbox" id="map-chk-overwrite">\
+                    <label for="map-chk-overwrite">Ghi đè bệnh nhân đã tồn tại ảnh</label>\
+                </div>\
+                <div class="map-checkbox-row">\
+                    <input type="checkbox" id="map-chk-include-unmatched">\
+                    <label for="map-chk-include-unmatched">Bao gồm BN chưa có ảnh (Thống kê danh sách tổng)</label>\
+                </div>\
+                <div class="map-checkbox-hint">Khi bật: chạy qua TẤT CẢ bệnh nhân trong Excel, kể cả ai chưa khớp được ảnh - để rà soát ai chưa có ảnh và phát hiện ai bị trùng kết quả tìm kiếm (CCCD trùng/2 dòng tên). Sẽ chạy lâu hơn vì không bỏ qua ai.</div>\
+            </div>\
+\
+            <div class="map-section">\
+                <div class="map-section-title">④ Điều khiển <span class="map-status-pill idle" id="map-status-pill"><span class="map-dot"></span><span id="map-status-text">Chưa chạy</span></span></div>\
+                <div class="map-row">\
+                    <button class="map-btn map-btn-success" id="map-btn-start">▶ Bắt đầu</button>\
+                    <button class="map-btn map-btn-warn" id="map-btn-pause" disabled>⏸ Tạm ngưng</button>\
+                    <button class="map-btn map-btn-danger" id="map-btn-stop" disabled>⏹ Dừng lại</button>\
+                </div>\
+                <div class="map-progress-wrap">\
+                    <div class="map-progress-bar-bg"><div class="map-progress-bar-fill" id="map-progress-fill"></div></div>\
+                    <div class="map-progress-text"><span id="map-progress-text-left">0 / 0</span><span id="map-progress-text-right">0%</span></div>\
+                </div>\
+                <div class="map-current-patient" id="map-current-patient"></div>\
+            </div>\
+\
+            <div class="map-divider"></div>\
+\
+            <div class="map-section">\
+                <div class="map-section-title">⑤ Nhật ký xử lý (Log)</div>\
+                <div class="map-stats-grid" style="margin-bottom:8px; grid-template-columns: 1fr 1fr 1fr;">\
+                    <div class="map-stat-card ok"><div class="map-stat-value" id="stat-log-success">0</div><div class="map-stat-label">Thành công</div></div>\
+                    <div class="map-stat-card warn"><div class="map-stat-value" id="stat-log-skip">0</div><div class="map-stat-label">Bỏ qua</div></div>\
+                    <div class="map-stat-card warn"><div class="map-stat-value" id="stat-log-error">0</div><div class="map-stat-label">Lỗi</div></div>\
+                </div>\
+                <div class="map-log-table-wrap">\
+                    <table class="map-log-table" id="map-log-table">\
+                        <thead><tr><th>#</th><th>STT Excel</th><th>Họ Tên</th><th>CCCD</th><th>Kết quả</th><th>Lý do</th></tr></thead>\
+                        <tbody id="map-log-tbody"></tbody>\
+                    </table>\
+                </div>\
+                <div class="map-footer-btn-row">\
+                    <button class="map-btn map-btn-secondary" id="map-btn-export">⬇ Xuất Excel Log</button>\
+                    <button class="map-btn map-btn-secondary" id="map-btn-precheck">🔍 Kiểm tra trước</button>\
+                </div>\
+            </div>\
+        </div>\
+        ';
+        document.body.appendChild(panel);
+
+        UI.panel = panel;
+        UI.fileInfo = panel.querySelector('#map-file-info');
+        UI.statTotalPatients = panel.querySelector('#stat-total-patients');
+        UI.statTotalPhotos = panel.querySelector('#stat-total-photos');
+        UI.statMatched = panel.querySelector('#stat-matched');
+        UI.statUnmatched = panel.querySelector('#stat-unmatched');
+        UI.chkOverwrite = panel.querySelector('#map-chk-overwrite');
+        UI.chkIncludeUnmatched = panel.querySelector('#map-chk-include-unmatched');
+        UI.btnStart = panel.querySelector('#map-btn-start');
+        UI.btnPause = panel.querySelector('#map-btn-pause');
+        UI.btnStop = panel.querySelector('#map-btn-stop');
+        UI.statusPill = panel.querySelector('#map-status-pill');
+        UI.statusText = panel.querySelector('#map-status-text');
+        UI.progressFill = panel.querySelector('#map-progress-fill');
+        UI.progressTextLeft = panel.querySelector('#map-progress-text-left');
+        UI.progressTextRight = panel.querySelector('#map-progress-text-right');
+        UI.currentPatientBox = panel.querySelector('#map-current-patient');
+        UI.logTbody = panel.querySelector('#map-log-tbody');
+        UI.statLogSuccess = panel.querySelector('#stat-log-success');
+        UI.statLogSkip = panel.querySelector('#stat-log-skip');
+        UI.statLogError = panel.querySelector('#stat-log-error');
+        UI.titleWrap = panel.querySelector('#map-title-wrap');
+        UI.titleText = panel.querySelector('#map-title-text');
+
+        // Bo dieu khien thu nho (hien khi panel o trang thai collapsed)
+        UI.btnStartMini = panel.querySelector('#map-btn-start-mini');
+        UI.btnPauseMini = panel.querySelector('#map-btn-pause-mini');
+        UI.btnStopMini = panel.querySelector('#map-btn-stop-mini');
+        UI.statusPillMini = panel.querySelector('#map-status-pill-mini');
+        UI.statusTextMini = panel.querySelector('#map-status-text-mini');
+        UI.progressFillMini = panel.querySelector('#map-progress-fill-mini');
+        UI.progressTextLeftMini = panel.querySelector('#map-progress-text-left-mini');
+        UI.progressTextRightMini = panel.querySelector('#map-progress-text-right-mini');
+        UI.currentPatientBoxMini = panel.querySelector('#map-current-patient-mini');
+
+        wireUpEvents();
+        makeDraggable(panel, panel.querySelector('#map-drag-handle'));
+        setupMarqueeTitle();
+    }
+
+    /**
+     * Kiem tra do rong thuc te cua tieu de so voi khung chua.
+     * Neu chu dai hon khung -> nhan doi text (de cuon vong lap khong bi giat)
+     * va bat animation marquee voi toc do ty le theo do dai (chu dai hon thi chay
+     * lau hon mot chut de toc do doc cam thay deu, khong qua nhanh).
+     */
+    function setupMarqueeTitle() {
+        var wrap = UI.titleWrap;
+        var textEl = UI.titleText;
+        if (!wrap || !textEl) return;
+
+        var originalText = textEl.textContent;
+
+        function evaluate() {
+            // Reset truoc khi do, tranh do nham luc dang chay animation/nhan doi text
+            wrap.classList.remove('marquee');
+            textEl.style.animation = 'none';
+            textEl.textContent = originalText;
+
+            var wrapWidth = wrap.clientWidth;
+            var textWidth = textEl.scrollWidth;
+
+            if (textWidth > wrapWidth + 2) {
+                // Nhan doi noi dung de tao vong lap cuon lien tuc, khong bi giat khi het chu
+                textEl.textContent = originalText + '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0' + originalText;
+                var loopDistance = textEl.scrollWidth / 2; // vi da nhan doi, dich chuyen -50% = 1 vong text goc
+                var pixelsPerSecond = 45; // toc do cuon, vua phai de doc duoc
+                var durationSeconds = Math.max(4, loopDistance / pixelsPerSecond);
+                textEl.style.animation = '';
+                textEl.style.animationDuration = durationSeconds + 's';
+                wrap.classList.add('marquee');
+            }
+        }
+
+        // Doi 1 frame de DOM render xong roi moi do (tranh do sai luc width = 0)
+        setTimeout(evaluate, 50);
+
+        // Do lai khi nguoi dung keo/resize panel hoac thu nho/phong to
+        window.addEventListener('resize', evaluate);
+        var resizeObserver = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(evaluate) : null;
+        if (resizeObserver) resizeObserver.observe(wrap);
+    }
+
+    function wireUpEvents() {
+        UI.panel.querySelector('#map-btn-collapse').addEventListener('click', function() {
+            UI.panel.classList.toggle('collapsed');
+            this.textContent = UI.panel.classList.contains('collapsed') ? '▢' : '▁';
+        });
+
+        UI.panel.querySelector('#map-btn-close-panel').addEventListener('click', function() {
+            if (STATE.status === 'running' || STATE.status === 'paused') {
+                showToast('⚠️ Hãy "Dừng lại" tiến trình trước khi đóng giao diện này', 'warn');
+                return;
+            }
+            UI.panel.style.display = 'none';
+        });
+
+        UI.panel.querySelector('#map-btn-excel').addEventListener('click', function() {
+            pickExcelFile().then(function(wb) {
+                STATE.rows = parsePatientsFromWorkbook(wb);
+                STATE.currentIndex = -1;
+                showToast('Đã đọc ' + STATE.rows.length + ' bệnh nhân từ Excel', 'success');
+                updateFileInfoUI();
+                runPrecheck();
+            }).catch(function(err) {
+                showToast('Lỗi đọc Excel: ' + err.message, 'error');
+            });
+        });
+
+        UI.panel.querySelector('#map-btn-folder').addEventListener('click', function() {
+            UI.fileInfo.textContent = 'Đang đọc thư mục ảnh... 0 ảnh';
+            pickPhotoFolder(function(daDoc, tong) {
+                UI.fileInfo.textContent = 'Đang đọc thư mục ảnh... ' + daDoc + ' / ' + tong + ' tệp';
+            }).then(function(map) {
+                STATE.photoMap = map;
+                showToast('Đã đọc ' + map.size + ' ảnh trong thư mục', 'success');
+                updateFileInfoUI();
+                runPrecheck();
+            });
+        });
+
+        UI.panel.querySelector('#map-btn-precheck').addEventListener('click', function() {
+            if (!STATE.rows.length || !STATE.photoMap) {
+                showToast('Cần tải Excel và chọn thư mục ảnh trước', 'warn');
+                return;
+            }
+            runPrecheck();
+            showToast('Đã kiểm tra đối chiếu xong', 'success');
+        });
+
+        UI.chkOverwrite.addEventListener('change', function() {
+            STATE.overwriteExisting = this.checked;
+        });
+
+        UI.chkIncludeUnmatched.addEventListener('change', function() {
+            STATE.includeUnmatched = this.checked;
+        });
+
+        UI.btnStart.addEventListener('click', function() {
+            startAutomation();
+        });
+        UI.btnPause.addEventListener('click', function() {
+            pauseAutomation();
+        });
+        UI.btnStop.addEventListener('click', function() {
+            stopAutomation();
+        });
+
+        // Bo nut mini (hien khi thu nho panel) - dung CHUNG logic voi bo nut day du
+        UI.btnStartMini.addEventListener('click', function() { startAutomation(); });
+        UI.btnPauseMini.addEventListener('click', function() { pauseAutomation(); });
+        UI.btnStopMini.addEventListener('click', function() { stopAutomation(); });
+
+        UI.panel.querySelector('#map-btn-export').addEventListener('click', function() {
+            exportLogToExcel();
+        });
+    }
+
+    function makeDraggable(panel, handle) {
+        var offsetX = 0, offsetY = 0, dragging = false;
+        handle.addEventListener('mousedown', function(e) {
+            dragging = true;
+            var rect = panel.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function(e) {
+            if (!dragging) return;
+            panel.style.left = (e.clientX - offsetX) + 'px';
+            panel.style.top = (e.clientY - offsetY) + 'px';
+            panel.style.right = 'auto';
+        });
+        document.addEventListener('mouseup', function() { dragging = false; });
+    }
+
+    /* ---------------------- CAP NHAT UI ---------------------- */
+
+    function updateFileInfoUI() {
+        var excelPart = STATE.rows.length ? (STATE.rows.length + ' bệnh nhân (Excel)') : 'Chưa tải file Excel';
+        var folderPart = STATE.photoMap ? (STATE.photoMap.size + ' ảnh (thư mục)') : 'Chưa chọn thư mục ảnh';
+        UI.fileInfo.textContent = excelPart + '  •  ' + folderPart;
+    }
+
+    function updateStatsUI() {
+        UI.statTotalPatients.textContent = PRECHECK.totalPatients;
+        UI.statTotalPhotos.textContent = PRECHECK.totalPhotos;
+        UI.statMatched.textContent = PRECHECK.matchedCount;
+        UI.statUnmatched.textContent = PRECHECK.unmatchedCount;
+
+        var successCount = STATE.logs.filter(function(l) { return l.ketQua === 'Thành công'; }).length;
+        var skipCount = STATE.logs.filter(function(l) { return l.ketQua === 'Bỏ qua'; }).length;
+        var errorCount = STATE.logs.filter(function(l) { return l.ketQua === 'Lỗi'; }).length;
+        UI.statLogSuccess.textContent = successCount;
+        UI.statLogSkip.textContent = skipCount;
+        UI.statLogError.textContent = errorCount;
+    }
+
+    function updateStatusUI() {
+        var labelMap = {
+            idle: 'Chưa chạy', running: 'Đang chạy', paused: 'Đã tạm ngưng',
+            stopped: 'Đã dừng', done: 'Hoàn tất',
+        };
+        var label = labelMap[STATE.status] || STATE.status;
+        var startLabel = (STATE.status === 'paused') ? '▶ Tiếp tục' : '▶ Bắt đầu';
+        var startDisabled = (STATE.status === 'running');
+        var pauseDisabled = (STATE.status !== 'running');
+        var stopDisabled = (STATE.status === 'idle' || STATE.status === 'stopped' || STATE.status === 'done');
+
+        // Bo dieu khien day du
+        UI.statusPill.className = 'map-status-pill ' + STATE.status;
+        UI.statusText.textContent = label;
+        UI.btnStart.disabled = startDisabled;
+        UI.btnStart.textContent = startLabel;
+        UI.btnPause.disabled = pauseDisabled;
+        UI.btnStop.disabled = stopDisabled;
+
+        // Bo dieu khien thu nho (mini) - dong bo cung trang thai
+        UI.statusPillMini.className = 'map-status-pill ' + STATE.status;
+        UI.statusTextMini.textContent = label;
+        UI.btnStartMini.disabled = startDisabled;
+        UI.btnStartMini.textContent = startLabel;
+        UI.btnPauseMini.disabled = pauseDisabled;
+        UI.btnStopMini.disabled = stopDisabled;
+
+        if (STATE.status !== 'running') {
+            UI.currentPatientBox.classList.remove('show');
+            UI.currentPatientBoxMini.classList.remove('show');
+        }
+    }
+
+    /**
+     * Cap nhat thanh tien trinh.
+     * @param {number} index - vi tri (0-based) trong STATE.queue dang duoc xu ly (hien thi "index+1 / total")
+     * @param {number} [finishedCount] - neu duoc cung cap, OVERRIDE cach tinh % bang so nay
+     *   (dung khi da xu ly XONG toan bo hang doi, can hien dung 100% chu khong phai 98%)
+     */
+    function updateProgressUI(index, finishedCount) {
+        var total = STATE.queue.length;
+        var done = (typeof finishedCount === 'number') ? finishedCount : (index + 1);
+        var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        UI.progressFill.style.width = pct + '%';
+        UI.progressTextLeft.textContent = done + ' / ' + total;
+        UI.progressTextRight.textContent = pct + '%';
+
+        // Dong bo bo dieu khien thu nho (mini)
+        UI.progressFillMini.style.width = pct + '%';
+        UI.progressTextLeftMini.textContent = done + ' / ' + total;
+        UI.progressTextRightMini.textContent = pct + '%';
+
+        var patient = STATE.queue[index];
+        if (patient) {
+            var label = '🔄 ' + patient.hoTen + ' — CCCD: ' + patient.cccd;
+            UI.currentPatientBox.classList.add('show');
+            UI.currentPatientBox.textContent = '🔄 Đang xử lý: ' + patient.hoTen + ' — CCCD: ' + patient.cccd;
+            UI.currentPatientBoxMini.classList.add('show');
+            UI.currentPatientBoxMini.textContent = label;
+        }
+    }
+
+    function renderLogTable() {
+        var tbody = UI.logTbody;
+        if (!STATE.logs.length) {
+            tbody.innerHTML = '<tr><td colspan="6"><div class="map-empty-log">Chưa có log nào</div></td></tr>';
+            return;
+        }
+        var tagClassMap = { 'Thành công': 'ok', 'Bỏ qua': 'skip', 'Lỗi': 'err' };
+        var rowsHtml = STATE.logs.slice().reverse().map(function(l) {
+            var cls = tagClassMap[l.ketQua] || 'skip';
+            return '<tr>' +
+                '<td>' + escapeHtml(l.sttHangDoi) + '</td>' +
+                '<td>' + escapeHtml(l.stt) + '</td>' +
+                '<td>' + escapeHtml(l.hoTen) + '</td>' +
+                '<td>' + escapeHtml(l.cccd) + '</td>' +
+                '<td><span class="map-tag ' + cls + '">' + escapeHtml(l.ketQua) + '</span></td>' +
+                '<td>' + escapeHtml(l.lyDo) + '</td>' +
+                '</tr>';
+        }).join('');
+        tbody.innerHTML = rowsHtml;
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /* ======================================================================
+     *  PHAN 9.5: LAUNCHER - NUT NHO GOC DUOI PHAI, MO THANG PANEL HANG LOAT
+     * ====================================================================== */
+
+    var LAUNCHER = {
+        panelBuilt: false, // panel lon (che do hang loat) da duoc tao chua - chi tao 1 lan, lazy
+    };
+
+    /** Mo (hoac hien lai) panel lon cua che do "Tu dong hang loat". Chi tao 1 lan, lazy. */
+    function openBatchPanel() {
+        if (!LAUNCHER.panelBuilt) {
+            buildPanel();
+            updateFileInfoUI();
+            updateStatusUI();
+            renderLogTable();
+            LAUNCHER.panelBuilt = true;
+        } else if (UI.panel) {
+            UI.panel.style.display = 'flex';
+        }
+    }
+    // Cho phep menu "Thao tac nhanh" (Medinet_user.js, IIFE phia tren) mo panel
+    // nay khi nguoi dung bam muc "Upload anh hang loat" - thay cho nut noi rieng
+    // o goc man hinh truoc day (theo yeu cau: don ve chung 1 menu, gioi han Pro).
+    if (window.__medinetUpload) window.__medinetUpload.openBatchPanel = openBatchPanel;
+
+    /* ======================================================================
+     *  PHAN 10: KHOI TAO
+     * ====================================================================== */
+
+    function init() {
+        if (typeof XLSX === 'undefined') {
+            console.error('[Medinet Auto Upload] Khong tai duoc thu vien XLSX. Kiem tra mang/@require.');
+        }
+        injectStyles();
+        // KHONG goi buildLauncher() nua - nut rieng o goc man hinh da duoc thay
+        // bang muc "Upload anh hang loat" trong menu "Thao tac nhanh" (xem
+        // ACTIONS o phan dau file), chi danh cho ban Pro.
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(init, 300);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() { setTimeout(init, 300); });
+    }
 
 })();
