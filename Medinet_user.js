@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.17.2
-// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto-match anh benh nhan theo ten+nam sinh
+// @version      6.21
+// @description  Nut Thao Tac Nhanh nam trong header + Thong tin hanh chinh auto-fill + Hoi benh va kham lam sang (phan loai nhom NCT) + Phim tat Shift+A an/hien nut + Auto Upload Anh Thong Minh (tu dong khop thong tin)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
@@ -28,23 +28,8 @@
         });
     }
 
-    function showToast(msg) {
-        var old = document.getElementById('_medinet_toast');
-        if (old) old.remove();
-        var toast = document.createElement('div');
-        toast.id = '_medinet_toast';
-        toast.textContent = msg;
-        Object.assign(toast.style, {
-            position: 'fixed', bottom: '90px', right: '24px', zIndex: '999999',
-            padding: '10px 16px', background: '#323232', color: '#fff',
-            borderRadius: '6px', fontSize: '13px',
-            boxShadow: '0 3px 8px rgba(0,0,0,0.3)',
-            opacity: '1', transition: 'opacity 0.5s', maxWidth: '340px',
-        });
-        document.body.appendChild(toast);
-        setTimeout(function() { toast.style.opacity = '0'; }, 2800);
-        setTimeout(function() { toast.remove(); }, 3400);
-    }
+    // showToast: dinh nghia o phan "AUTO UPLOAD ANH THONG MINH" phia duoi
+    // (ham moi showToast(msg, type) tuong thich nguoc 100% voi cac loi goi showToast(msg) cu)
 
     var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
 
@@ -1416,6 +1401,21 @@
                 }, 400);
             }
         },
+        {
+            emoji: '\ud83d\uddbc\ufe0f', label: 'Upload \u1ea3nh th\u00f4ng minh',
+            // Kha dung cho ca Lite va Pro
+            tier: 'lite',
+            color: '#6a1b9a', hoverColor: '#4a148c',
+            // Chi kha dung tren trang "Thong tin hanh chinh" - URL cua moi loai
+            // phieu (M13, M12, NCT...) deu co hau to "_TTHC" khi dang o thẻ nay.
+            check: function() {
+                return window.location.href.indexOf('_TTHC') !== -1;
+            },
+            fn: function() {
+                disableSingleMode(); // tranh gan trung listener neu bam nhieu lan
+                enableSingleMode();
+            }
+        },
 
         {
             emoji: '\ud83d\udcc1', label: 'KSK Vi\u1ec7c l\u00e0m + L\u00e1i xe',
@@ -1585,7 +1585,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.17.2';
+                var CURRENT_VERSION = '6.21';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2221,13 +2221,16 @@
     }
 
     // Popup nhap license code (dung ca khi chua kich hoat lan khi het han)
-    function showLicenseExpiredPopup() {
+    function showLicenseExpiredPopup(forceTitle) {
         var POPUP_ID = '_mtt_license_popup';
         if (document.getElementById(POPUP_ID)) return;
 
         var mid = getMachineId();
         var lic = getLicense();
         var isExp = lic && new Date(lic.expiry) <= new Date();
+        // forceTitle: dung cho truong hop ban Lite bam vao muc chi danh cho Pro
+        // (khac voi "het han"/"chua kich hoat" - nguoi dung DA co license hop le)
+        var isUpgrade = forceTitle === 'upgrade';
 
         var overlay = document.createElement('div');
         overlay.id = POPUP_ID;
@@ -2260,25 +2263,26 @@
 
         // Icon
         var iconEl = document.createElement('div');
-        iconEl.textContent = isExp ? '\ud83d\udd12' : '\ud83d\udd11';
+        iconEl.textContent = isUpgrade ? '\u2b50' : (isExp ? '\ud83d\udd12' : '\ud83d\udd11');
         Object.assign(iconEl.style, { fontSize: '44px', marginBottom: '10px' });
         card.appendChild(iconEl);
 
         // Tieu de
         var titleEl = document.createElement('div');
-        titleEl.textContent = isExp
-            ? 'License \u0111\u00e3 h\u1ebft h\u1ea1n'
-            : 'Ch\u01b0a k\u00edch ho\u1ea1t';
+        titleEl.textContent = isUpgrade
+            ? 'Ch\u1ec9 d\u00e0nh cho b\u1ea3n Pro'
+            : (isExp ? 'License \u0111\u00e3 h\u1ebft h\u1ea1n' : 'Ch\u01b0a k\u00edch ho\u1ea1t');
         Object.assign(titleEl.style, {
             fontSize: '20px', fontWeight: '800',
-            color: isExp ? '#c62828' : '#e65100',
+            color: isUpgrade ? '#6a1b9a' : (isExp ? '#c62828' : '#e65100'),
             marginBottom: '6px',
         });
         card.appendChild(titleEl);
 
         // Huong dan lien he
         var subMsg = document.createElement('div');
-        subMsg.innerHTML =
+        subMsg.innerHTML = (isUpgrade
+                ? 'T\u00ednh n\u0103ng n\u00e0y ch\u1ec9 d\u00e0nh cho b\u1ea3n <b>Pro</b>. ' : '') +
             'Vui l\u00f2ng li\u00ean h\u1ec7 t\u00e1c gi\u1ea3 \u0111\u1ec3 \u0111\u01b0\u1ee3c c\u1ea5p m\u00e3:<br>' +
             '<span style="font-size:17px;font-weight:700;color:#1565c0">\u260e\ufe0f\u00a00868.91.97.90</span>';
         Object.assign(subMsg.style, {
@@ -2723,27 +2727,46 @@
         }
     });
 
+
     // ================================================================
-    //  AUTO-PHOTO: Tu dong khop anh benh nhan theo ten + nam sinh
-    //
-    //  Luong hoat dong:
-    //  1. Lan dau click vao vung File anh -> mo chon THU MUC (webkitdirectory)
-    //  2. Quet toan bo file anh trong thu muc, luu vao _photoMap (session)
-    //  3. Doc HoVaTen + NamSinh tu form -> ghep thanh "HO VA TEN YYYY"
-    //  4. So sanh (khong phan biet hoa thuong, bo dau tieng Viet) voi ten file
-    //  5. Tim thay -> inject File vao input[type=file] cua DevExtreme
-    //     + dispatch change + de DevExtreme tu upload
-    //  6. Khong tim thay -> toast canh bao
-    //
-    //  Shift+Click vao vung anh = chon lai thu muc
+    //  AUTO UPLOAD ANH THONG MINH
+    //  Che do "Tu dong khop thong tin": click chan vao vung upload anh tren
+    //  form chi tiet benh nhan dang mo -> lan dau hoi chon THU MUC chua anh ->
+    //  tu dong khop Ho Ten + Ngay Sinh + CCCD -> inject anh. Nguoi dung tu
+    //  bam "Luu thay doi" (khong tu dong luu). Hien thi qua menu "Thao tac
+    //  nhanh" > "Upload anh thong minh".
     // ================================================================
 
-    var _photoMap   = null;   // Map<keyChuan, File>
-    var _photoInput = null;   // <input webkitdirectory> dung de chon thu muc
 
-    /** Chuan hoa: bo dau tieng Viet, thuong hoa, giu chu + so */
-    function _normalizePhotoName(str) {
-        return str
+    /* ======================================================================
+     *  PHAN 0.1: TOAST
+     * ====================================================================== */
+
+    function showToast(msg, type) {
+        var old = document.getElementById('_medinet_toast');
+        if (old) old.remove();
+        var toast = document.createElement('div');
+        toast.id = '_medinet_toast';
+        toast.textContent = msg;
+        var bg = type === 'error' ? '#c0392b' : type === 'success' ? '#27ae60' : type === 'warn' ? '#e67e22' : '#323232';
+        Object.assign(toast.style, {
+            position: 'fixed', bottom: '90px', right: '24px', zIndex: '2147483000',
+            padding: '10px 16px', background: bg, color: '#fff',
+            borderRadius: '6px', fontSize: '13px', fontFamily: 'Segoe UI, Arial, sans-serif',
+            boxShadow: '0 3px 8px rgba(0,0,0,0.3)',
+            opacity: '1', transition: 'opacity 0.5s', maxWidth: '360px',
+        });
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.style.opacity = '0'; }, 2800);
+        setTimeout(function() { toast.remove(); }, 3400);
+    }
+
+    /* ======================================================================
+     *  PHAN 0.2: TIEN ICH CHUO / SO / NGAY
+     * ====================================================================== */
+
+    function normalizeNoDiacritics(str) {
+        return String(str || '')
             .toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
@@ -2753,192 +2776,38 @@
             .trim();
     }
 
-    /** Doc Ho va Ten tu form */
-    function _getPatientFullName() {
-        // Chien luoc 1: tim theo class ro rang nhat
-        var selectors = [
-            '.HoVaTen input.dx-texteditor-input',
-            '.HoTen input.dx-texteditor-input',
-            '.TenBenhNhan input.dx-texteditor-input',
-            'input[placeholder*="H\u1ecd v\u00e0 t\u00ean"]',
-            'input[placeholder*="H\u1ecd t\u00ean"]',
-        ];
-        for (var i = 0; i < selectors.length; i++) {
-            var el = document.querySelector(selectors[i]);
-            if (el && el.value.trim()) return el.value.trim();
-        }
-
-        // Chien luoc 2: tim label co chu "Ho va ten" roi lay input ke ben
-        // Form dung label dang <label> hoac span voi text "Ho va ten *"
-        var allLabels = document.querySelectorAll('label, .dx-field-label, .label');
-        for (var li = 0; li < allLabels.length; li++) {
-            var lblTxt = (allLabels[li].textContent || '').replace(/\s+/g, ' ').trim();
-            // Normalize de so sanh: bo dau, thuong hoa
-            var lblNorm = _normalizePhotoName(lblTxt);
-            if (lblNorm.indexOf('ho va ten') === -1) continue;
-            // Tim input gan nhat trong cung row/container
-            var container = allLabels[li].closest('.dx-field, .form-group, tr, .row') || allLabels[li].parentElement;
-            for (var ci = 0; ci < 4 && container; ci++) {
-                var inp = container.querySelector('input.dx-texteditor-input');
-                if (inp && inp.value.trim().length >= 2) return inp.value.trim();
-                container = container.parentElement;
-            }
-        }
-
-        // Chien luoc 3: tim input co gia tri nam giua CMND va NgaySinh
-        // Tren form: [CMND input] [Tim kiem btn] [Ho Ten input] [NgaySinh input]
-        // => lay input text dau tien KHONG co so va co >= 2 tu
-        // Dung querySelectorAll va loc theo DOM order
-        var formInputs = document.querySelectorAll(
-            '.dx-form input.dx-texteditor-input, ' +
-            'dx-form input.dx-texteditor-input, ' +
-            'form input.dx-texteditor-input, ' +
-            '.form-content input.dx-texteditor-input'
-        );
-        // Fallback: tat ca input neu khong tim duoc trong form
-        if (!formInputs.length) formInputs = document.querySelectorAll('dx-text-box input.dx-texteditor-input');
-
-        for (var j = 0; j < formInputs.length; j++) {
-            var v = formInputs[j].value.trim();
-            if (v.length < 3) continue;           // qua ngan
-            if (/\d/.test(v)) continue;           // co so -> SDT/CMND
-            if (/@|\/|\\/.test(v)) continue;      // email/path
-            if (v.indexOf(' ') === -1) continue;  // phai co it nhat 1 khoang trang (ho + ten)
-            return v;
-        }
-        return null;
+    function onlyDigits(str) {
+        return String(str || '').replace(/\D/g, '');
     }
 
-    /** Doc nam sinh tu NgaySinh */
-    function _getPatientBirthYear() {
-        var el = document.querySelector('.NgaySinh input[type="hidden"]');
-        if (!el) el = document.querySelector('.NgaySinh dx-date-box input[type="hidden"]');
-        if (el && el.value) {
-            var m = el.value.match(/^(\d{4})/);
-            if (m) return m[1];
-        }
-        var dateInput = document.querySelector('.NgaySinh input.dx-texteditor-input');
-        if (dateInput && dateInput.value) {
-            var parts = dateInput.value.split('/');
-            if (parts.length === 3 && parts[2].length === 4) return parts[2];
-        }
-        return null;
+    function sleep(ms) {
+        return new Promise(function(resolve) { setTimeout(resolve, ms); });
     }
 
-    /**
-     * Tim input[type=file] tren trang (khong phai _photoInput cua ta).
-     * Uu tien input co accept image hoac thuoc dx-fileuploader.
-     */
-    function _findNativeFileInput() {
-        var all = document.querySelectorAll('input[type="file"]');
-        var candidates = [];
-        for (var i = 0; i < all.length; i++) {
-            if (all[i] === _photoInput) continue;
-            candidates.push(all[i]);
-        }
-        if (candidates.length === 0) return null;
-        if (candidates.length === 1) return candidates[0];
-        for (var j = 0; j < candidates.length; j++) {
-            if ((candidates[j].accept || '').toLowerCase().indexOf('image') !== -1) return candidates[j];
-        }
-        return candidates[0];
+    /** Cho mot dieu kien tro thanh true, polling moi `interval` ms, toi da `timeout` ms. */
+    function waitFor(conditionFn, timeout, interval) {
+        timeout = timeout || 8000;
+        interval = interval || 150;
+        return new Promise(function(resolve, reject) {
+            var start = Date.now();
+            (function check() {
+                var result;
+                try { result = conditionFn(); } catch (e) { result = null; }
+                if (result) { resolve(result); return; }
+                if (Date.now() - start >= timeout) { reject(new Error('Timeout')); return; }
+                setTimeout(check, interval);
+            })();
+        });
     }
 
-    /**
-     * Inject File vao dx-fileuploader:
-     * B1: set .files qua DataTransfer
-     * B2: dispatch 'change' + 'input'
-     * B3: neu DevExtreme van khong phan ung -> thu click programmatic
-     *     de no mo dialog, nhung truoc do da set files => no doc files moi
-     *
-     * Ghi chu: DevExtreme dx-fileuploader bind su kien 'change' tren input
-     * ben trong. Miễn la input.files duoc set truoc khi 'change' bubble len,
-     * no se xu ly dung.
-     */
-    function _injectFileIntoInput(nativeInput, file) {
-        try {
-            var dt = new DataTransfer();
-            dt.items.add(file);
+    /* ======================================================================
+     *  PHAN 1: PHOTO MATCHING ENGINE
+     *  (giu nguyen logic da kiem chung tu ban "Auto Photo Upload")
+     * ====================================================================== */
 
-            // Xoa files cu truoc (dam bao Angular/DX detect su thay doi)
-            try { nativeInput.files = new DataTransfer().files; } catch(e2) {}
-
-            // Gan file moi
-            nativeInput.files = dt.files;
-
-            // Dispatch theo thu tu DevExtreme mong doi
-            ['input', 'change'].forEach(function(evName) {
-                nativeInput.dispatchEvent(new Event(evName, { bubbles: true, cancelable: true }));
-            });
-
-            // Fallback: neu DX dung Object.defineProperty de intercept .files
-            // thi thu dispatch qua nativeInputValueSetter
-            try {
-                var nativeFileListSetter = Object.getOwnPropertyDescriptor(
-                    HTMLInputElement.prototype, 'files'
-                );
-                if (nativeFileListSetter && nativeFileListSetter.set) {
-                    nativeFileListSetter.set.call(nativeInput, dt.files);
-                    nativeInput.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            } catch(e3) {}
-
-        } catch(e) {
-            showToast('\u26a0\ufe0f L\u1ed7i inject file: ' + e.message);
-        }
-    }
-
-    /** Doc ngay sinh dang ddmmyyyy tu form */
-    function _getPatientBirthDDMMYYYY() {
-        // Thu input hidden truoc (gia tri ISO)
-        var el = document.querySelector('.NgaySinh input[type="hidden"]');
-        if (!el) el = document.querySelector('.NgaySinh dx-date-box input[type="hidden"]');
-        if (el && el.value) {
-            // ISO: YYYY-MM-DD hoac DD/MM/YYYY
-            var m = el.value.match(/(\d{4})-(\d{2})-(\d{2})/);
-            if (m) return m[3] + m[2] + m[1]; // ddmmyyyy
-        }
-        var dateInput = document.querySelector('.NgaySinh input.dx-texteditor-input');
-        if (dateInput && dateInput.value) {
-            var parts = dateInput.value.split('/');
-            if (parts.length === 3) {
-                var dd = parts[0].padStart(2,'0');
-                var mm = parts[1].padStart(2,'0');
-                var yyyy = parts[2];
-                return dd + mm + yyyy; // ddmmyyyy
-            }
-        }
-        return null;
-    }
-
-    /** Doc so CMND/CCCD tu form */
-    function _getPatientCMND() {
-        var selectors = [
-            '.SoCMND input.dx-texteditor-input',
-            '.CCCD input.dx-texteditor-input',
-            '.SoCCCD input.dx-texteditor-input',
-            'input[placeholder*="CMND"]',
-            'input[placeholder*="CCCD"]',
-        ];
-        for (var i = 0; i < selectors.length; i++) {
-            var el = document.querySelector(selectors[i]);
-            if (el && el.value.trim()) return el.value.trim().replace(/\s+/g,'');
-        }
-        // fallback: tim input chi co so, 9-12 ky tu
-        var inputs = document.querySelectorAll('input.dx-texteditor-input');
-        for (var j = 0; j < inputs.length; j++) {
-            var v = inputs[j].value.trim();
-            if (/^\d{9,12}$/.test(v)) return v;
-        }
-        return null;
-    }
-
-    /**
-     * Chuan hoa ten file: bo dau, viet thuong, chi giu chu + so.
-     * Tra ve mang cac "token" (cum lien tuc chu/so), bo khoang trang/gach.
-     */
-    function _tokenizeFileName(str) {
-        return str
+    /** Tach token, bo dau, viet thuong, chi giu chu+so */
+    function tokenizeNoDiacritics(str) {
+        return String(str || '')
             .toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
@@ -2949,167 +2818,421 @@
             .filter(function(t) { return t.length > 0; });
     }
 
-    /**
-     * Tim anh khop voi benh nhan hien tai va upload.
-     * Logic khop moi: kiem tra 3 thanh phan (ten, ddmmyyyy, cmnd) deu
-     * xuat hien trong tap hop token cua ten file (bo het khoang trang, gach, dau phay).
-     */
-    function _tryMatchAndUpload() {
-        var name  = _getPatientFullName();
-        var dob   = _getPatientBirthDDMMYYYY();
-        var cmnd  = _getPatientCMND();
+    /** Tach token giu dau tieng Viet (chi thuong hoa, bo ky tu dac biet) */
+    function tokenizeKeepDiacritics(str) {
+        return String(str || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\u00c0-\u024f\u1e00-\u1eff]+/gi, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(function(t) { return t.length > 0; });
+    }
 
-        if (!name) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c H\u1ecd v\u00e0 T\u00ean'); return false; }
-        if (!dob)  { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c Ng\u00e0y sinh'); return false; }
-        if (!cmnd) { showToast('\u26a0\ufe0f Ch\u01b0a \u0111\u1ecdc \u0111\u01b0\u1ee3c CMND/CCCD'); return false; }
-
-        // Chuan hoa 3 thanh phan tim kiem
-        var nameTokens = _tokenizeFileName(name); // VD: ['bui','thi','phuc']
-        var dobToken   = dob.replace(/\D/g,'');   // VD: '21061954'
-        var cmndToken  = cmnd.replace(/\D/g,'');  // VD: '075154000543'
-
-        var matched = null;
-        _photoMap.forEach(function(file) {
-            if (matched) return;
-            var fileTokens = _tokenizeFileName(file.name.replace(/\.[^.]+$/, ''));
-            var fileStr = fileTokens.join(''); // chuoi lien tuc khong khoang trang
-
-            // Kiem tra ten: tat ca token cua ten benh nhan phai co trong fileTokens (theo thu tu)
-            var nameMatch = true;
-            var searchFrom = 0;
-            for (var i = 0; i < nameTokens.length; i++) {
-                var found = false;
-                for (var j = searchFrom; j < fileTokens.length; j++) {
-                    if (fileTokens[j] === nameTokens[i]) { searchFrom = j + 1; found = true; break; }
+    /** Kiem tra ten benh nhan co khop voi token ten file (co dau hoac khong dau, roi rac hoac lien) */
+    function matchPatientName(nameTokensNoDiac, nameTokensRaw, fileTokens, fileTokensRaw) {
+        function checkOrder(needles, haystack) {
+            var from = 0;
+            for (var i = 0; i < needles.length; i++) {
+                var ok = false;
+                for (var j = from; j < haystack.length; j++) {
+                    if (haystack[j] === needles[i]) { from = j + 1; ok = true; break; }
                 }
-                if (!found) { nameMatch = false; break; }
+                if (!ok) return false;
             }
-            if (!nameMatch) return;
-
-            // Kiem tra ngay sinh (ddmmyyyy) co trong chuoi lien tuc
-            if (fileStr.indexOf(dobToken) === -1) return;
-
-            // Kiem tra CMND/CCCD co trong chuoi lien tuc
-            if (fileStr.indexOf(cmndToken) === -1) return;
-
-            matched = file;
-        });
-
-        if (!matched) {
-            showToast('\u274c Kh\u00f4ng t\u00ecm th\u1ea5y file h\u1ee3p l\u1ec7');
-            return false;
+            return true;
         }
+        if (checkOrder(nameTokensNoDiac, fileTokens)) return true;
+        if (checkOrder(nameTokensRaw, fileTokensRaw)) return true;
 
-        var nativeInput = _findNativeFileInput();
-        if (!nativeInput) { showToast('\u26a0\ufe0f Kh\u00f4ng t\u00ecm th\u1ea5y \u00f4 upload \u1ea3nh tr\u00ean trang'); return false; }
+        var concatNoDiac = nameTokensNoDiac.join('');
+        var fileStr = fileTokens.join('');
+        if (concatNoDiac.length > 0 && fileStr.indexOf(concatNoDiac) !== -1) return true;
 
-        _injectFileIntoInput(nativeInput, matched);
-        showToast('\u2705 \u0110\u00e3 ch\u1ecdn \u1ea3nh: ' + matched.name);
+        var concatRaw = nameTokensRaw.join('');
+        var fileStrRaw = fileTokensRaw.join('');
+        if (concatRaw.length > 0 && fileStrRaw.indexOf(concatRaw) !== -1) return true;
+
+        return false;
+    }
+
+    /**
+     * Tim file anh khop voi 1 benh nhan (theo Ho Ten + Nam/Ngay sinh + CCCD).
+     * @param {{hoTen:string, ngaySinhDDMMYYYY:string, cccd:string}} patient
+     * @param {Map<string,File>} photoMap
+     * @returns {File|null}
+     */
+    function findMatchingPhoto(patient, photoMap) {
+        if (!photoMap || photoMap.size === 0) return null;
+
+        var dobClean = onlyDigits(patient.ngaySinhDDMMYYYY);
+        var dobFull = dobClean.length === 8 ? dobClean : '';
+        var dobYear = dobClean.length >= 4 ? dobClean.slice(-4) : '';
+        var cccdToken = onlyDigits(patient.cccd);
+
+        var nameTokensNoDiac = tokenizeNoDiacritics(patient.hoTen);
+        var nameTokensRaw = tokenizeKeepDiacritics(patient.hoTen);
+
+        var found = null;
+        photoMap.forEach(function(file) {
+            if (found) return;
+            var baseName = file.name.replace(/\.[^.]+$/, '');
+            var fileTokens = tokenizeNoDiacritics(baseName);
+            var fileTokensRaw = tokenizeKeepDiacritics(baseName);
+            var fileStr = fileTokens.join('');
+
+            if (!matchPatientName(nameTokensNoDiac, nameTokensRaw, fileTokens, fileTokensRaw)) return;
+
+            var dobMatch = (dobFull && fileStr.indexOf(dobFull) !== -1) ||
+                           (dobYear && fileStr.indexOf(dobYear) !== -1);
+            if (!dobMatch) return;
+
+            if (!cccdToken) return;
+            var fileDigitStr = onlyDigits(baseName);
+            if (fileDigitStr.indexOf(cccdToken) === -1) return;
+
+            found = file;
+        });
+        return found;
+    }
+
+    /* ======================================================================
+     *  PHAN 2: BIEN DUNG CHUNG (phan loai duoi anh hop le - dung cho
+     *  che do Tu dong khop thong tin, xem SINGLE_MODE.folderInput phia duoi)
+     * ====================================================================== */
+
+    var IMAGE_EXT_RE = /\.(jpe?g|png|webp)$/i;
+
+    /* ======================================================================
+     *  PHAN 4: DOM ACTIONS - TUONG TAC VOI TRANG MEDINET
+     * ====================================================================== */
+
+    /** Tim element bang text noi dung (khong phan biet hoa thuong/dau), trong 1 danh sach selector. */
+    function findByText(selector, text) {
+        var nodes = document.querySelectorAll(selector);
+        var target = normalizeNoDiacritics(text);
+        for (var i = 0; i < nodes.length; i++) {
+            var t = normalizeNoDiacritics(nodes[i].textContent);
+            if (t === target || t.indexOf(target) !== -1) return nodes[i];
+        }
+        return null;
+    }
+
+    /** Kich hoat click "that" tren mot element (mousedown+mouseup+click) - than thien voi DevExtreme/Angular. */
+    function fireClick(el) {
+        if (!el) return false;
+        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function(type) {
+            try {
+                el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+            } catch (e) {}
+        });
         return true;
     }
 
-    /** Mo hop thoai chon thu muc, quet file, cap nhat _photoMap */
-    function _pickFolderAndMatch() {
-        // Khong xoa _photoInput cu - chi tao moi neu chua co
-        // (xoa roi tao lai co the khien onchange khong fire tren mot so Chrome)
-        if (!_photoInput || !document.body.contains(_photoInput)) {
-            _photoInput = document.createElement('input');
-            _photoInput.type = 'file';
-            _photoInput.webkitdirectory = true;
-            _photoInput.multiple = true;
-            _photoInput.accept = 'image/jpeg,image/png,image/webp,image/jpg';
-            _photoInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
-            document.body.appendChild(_photoInput);
+    /** Set gia tri input theo cach React/Angular nhan dien duoc (qua native setter) roi fire event. */
+    function setInputValue(input, value) {
+        var proto = window.HTMLInputElement.prototype;
+        var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+        input.focus();
+        if (desc && desc.set) {
+            desc.set.call(input, value);
+        } else {
+            input.value = value;
+        }
+        // DevExtreme/Angular co the lang nghe ca input/change va key events de debounce search
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'a' }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    /** Tim icon camera (vung upload anh) tren form chi tiet benh nhan. */
+    function findCameraUploadIcon() {
+        var icon = document.querySelector('hfileupload .avatar-overlay i.fa-camera, hfileupload i.fa-camera');
+        if (icon && icon.offsetParent !== null) return icon;
+        // fallback: bat ky icon camera nao dang hien
+        var all = document.querySelectorAll('i.fa-camera, i.fas.fa-camera');
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].offsetParent !== null) return all[i];
+        }
+        return null;
+    }
+
+    /** Kiem tra benh nhan da co anh dai dien hay chua (avatar khac default). */
+    function patientAlreadyHasPhoto() {
+        var img = document.querySelector('hfileupload .avatar-container img, hfileupload img');
+        if (!img) return false;
+        var src = img.getAttribute('src') || '';
+        if (!src) return false;
+        if (src.indexOf('default') !== -1 || src.indexOf('no-image') !== -1 || src.indexOf('no_image') !== -1) return false;
+        return true;
+    }
+
+    /** Tim input[type=file] thuc su (cua dx-fileuploader), bo qua input thu muc cua chinh script. */
+    function findNativeFileInput() {
+        var all = document.querySelectorAll('input[type="file"]');
+        for (var i = 0; i < all.length; i++) {
+            var el = all[i];
+            if (el === SINGLE_MODE.folderInput) continue;
+            if (el.closest('.dx-fileuploader-input-wrapper') || el.classList.contains('dx-fileuploader-input')) {
+                return el;
+            }
+        }
+        for (var j = 0; j < all.length; j++) {
+            if (all[j] !== SINGLE_MODE.folderInput) return all[j];
+        }
+        return null;
+    }
+
+    /** Inject 1 File vao input file cua dx-fileuploader, kich hoat upload. */
+    function injectFileIntoInput(nativeInput, file) {
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files');
+            if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(nativeInput, dt.files);
+            } else {
+                nativeInput.files = dt.files;
+            }
+            ['input', 'change'].forEach(function(evName) {
+                nativeInput.dispatchEvent(new Event(evName, { bubbles: true, cancelable: true }));
+            });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /* ======================================================================
+     *  PHAN 5.5: CHE DO "TU DONG KHOP THONG TIN" (1 benh nhan dang mo, thu cong Luu)
+     *
+     *  - KHONG co giao dien lon, KHONG doc Excel
+     *  - Chi hoat dong tren FORM CHI TIET dang mo san (nguoi dung tu mo benh nhan)
+     *  - Click chan vao vung upload anh tren web -> lan dau hoi chon THU MUC,
+     *    cac lan sau dung lai thu muc da chon (luu trong session)
+     *  - Tu dong khop ten file theo Ho Ten + Ngay Sinh + CCCD doc tu form, inject anh
+     *  - KHONG tu bam "Luu thay doi" - nguoi dung tu bam
+     * ====================================================================== */
+
+    var SINGLE_MODE = {
+        active: false,         // co dang o che do nay khong
+        photoMap: null,        // Map<filename, File> - thu muc da chon (dung lai cho lan sau)
+        folderInput: null,     // input webkitdirectory rieng cho che do nay
+    };
+
+    /** Chuan hoa de so sanh ten nhan (giong logic cua showToast trong file goc, gon hon). */
+    function _normalizeForLabelMatch(str) {
+        return normalizeNoDiacritics(str);
+    }
+
+    /** Doc Ho va Ten tu form chi tiet dang mo (nhieu chien luoc du phong, ke ca khi khong co class ro rang). */
+    function getCurrentPatientFullName() {
+        var selectors = [
+            '.HoVaTen input.dx-texteditor-input',
+            '.HoTen input.dx-texteditor-input',
+            '.TenBenhNhan input.dx-texteditor-input',
+            'input[placeholder*="Họ và tên"]',
+            'input[placeholder*="Họ tên"]',
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+            var el = document.querySelector(selectors[i]);
+            if (el && el.value && el.value.trim()) return el.value.trim();
         }
 
-        // Reset value de co the chon lai cung thu muc
-        try { _photoInput.value = ''; } catch(e) {}
-
-        _photoInput.onchange = function() {
-            var files = _photoInput.files;
-            if (!files || files.length === 0) return;
-            _photoMap = new Map();
-            var IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
-            for (var i = 0; i < files.length; i++) {
-                var f = files[i];
-                if (!IMAGE_EXT.test(f.name)) continue;
-                // Key = ten file goc (giu nguyen de _tryMatchAndUpload tu phan tich)
-                _photoMap.set(f.name, f);
+        // Tim qua label "Ho va ten" roi lay input ke ben
+        var allLabels = document.querySelectorAll('label, .dx-field-label, .label');
+        for (var li = 0; li < allLabels.length; li++) {
+            var lblTxt = (allLabels[li].textContent || '').replace(/\s+/g, ' ').trim();
+            if (_normalizeForLabelMatch(lblTxt).indexOf('ho va ten') === -1) continue;
+            var container = allLabels[li].closest('.dx-field, .form-group, tr, .row') || allLabels[li].parentElement;
+            for (var ci = 0; ci < 4 && container; ci++) {
+                var inp = container.querySelector('input.dx-texteditor-input');
+                if (inp && inp.value && inp.value.trim().length >= 2) return inp.value.trim();
+                container = container.parentElement;
             }
-            showToast('\ud83d\udcc2 \u0110\u00e3 \u0111\u1ecdc ' + _photoMap.size + ' \u1ea3nh trong th\u01b0 m\u1ee5c');
-            setTimeout(_tryMatchAndUpload, 300);
-        };
+        }
 
-        _photoInput.click();
+        // Fallback: input chu, >=2 tu, khong so, khong @/
+        var formInputs = document.querySelectorAll(
+            '.dx-form input.dx-texteditor-input, dx-form input.dx-texteditor-input, ' +
+            'form input.dx-texteditor-input, .form-content input.dx-texteditor-input'
+        );
+        if (!formInputs.length) formInputs = document.querySelectorAll('dx-text-box input.dx-texteditor-input');
+        for (var j = 0; j < formInputs.length; j++) {
+            var v = formInputs[j].value ? formInputs[j].value.trim() : '';
+            if (v.length < 3 || /\d/.test(v) || /[@\/\\]/.test(v) || v.indexOf(' ') === -1) continue;
+            return v;
+        }
+        return null;
+    }
+
+    /** Doc ngay sinh dang ddmmyyyy tu form chi tiet dang mo. */
+    function getCurrentPatientBirthDDMMYYYY() {
+        var el = document.querySelector('.NgaySinh input[type="hidden"]');
+        if (!el) el = document.querySelector('.NgaySinh dx-date-box input[type="hidden"]');
+        if (el && el.value) {
+            var m = el.value.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (m) return m[3] + m[2] + m[1];
+        }
+        var dateInput = document.querySelector('.NgaySinh input.dx-texteditor-input');
+        if (dateInput && dateInput.value) {
+            var parts = dateInput.value.split('/');
+            if (parts.length === 3) {
+                return parts[0].padStart(2, '0') + parts[1].padStart(2, '0') + parts[2];
+            }
+        }
+        return null;
+    }
+
+    /** Doc so CMND/CCCD tu form chi tiet dang mo. */
+    function getCurrentPatientCMND() {
+        var selectors = [
+            '.SoCMND input.dx-texteditor-input', '.CCCD input.dx-texteditor-input',
+            '.SoCCCD input.dx-texteditor-input', 'input[placeholder*="CMND"]', 'input[placeholder*="CCCD"]',
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+            var el = document.querySelector(selectors[i]);
+            if (el && el.value && el.value.trim()) return el.value.trim().replace(/\s+/g, '');
+        }
+        var inputs = document.querySelectorAll('input.dx-texteditor-input');
+        for (var j = 0; j < inputs.length; j++) {
+            var v = inputs[j].value ? inputs[j].value.trim() : '';
+            if (/^\d{9,12}$/.test(v)) return v;
+        }
+        return null;
     }
 
     /**
-     * Kiem tra node co phai vung upload File anh khong.
-     * Tra ve nativeInput neu dung, null neu khong.
+     * Tim va inject anh khop cho benh nhan dang mo tren form, dung SINGLE_MODE.photoMap.
+     * Tai dung dung engine findMatchingPhoto() (giong che do hang loat) de dam bao
+     * 2 che do luon cho ra ket qua khop nhau.
      */
-    function _getUploadNodeIfMatch(target) {
+    function singleModeTryMatchAndUpload() {
+        var hoTen = getCurrentPatientFullName();
+        var dob = getCurrentPatientBirthDDMMYYYY();
+        var cccd = getCurrentPatientCMND();
+
+        if (!hoTen) { showToast('⚠️ Chưa đọc được Họ và Tên', 'warn'); return false; }
+        if (!dob) { showToast('⚠️ Chưa đọc được Ngày sinh', 'warn'); return false; }
+        if (!cccd) { showToast('⚠️ Chưa đọc được CMND/CCCD', 'warn'); return false; }
+
+        var patient = { hoTen: hoTen, ngaySinhDDMMYYYY: dob, cccd: cccd };
+        var matched = findMatchingPhoto(patient, SINGLE_MODE.photoMap);
+
+        if (!matched) {
+            showToast('❌ Không tìm thấy ảnh khớp trong thư mục đã chọn', 'error');
+            return false;
+        }
+
+        var nativeInput = findNativeFileInput();
+        if (!nativeInput) {
+            showToast('⚠️ Không tìm thấy ô upload ảnh trên trang', 'warn');
+            return false;
+        }
+
+        var ok = injectFileIntoInput(nativeInput, matched);
+        if (ok) {
+            showToast('✅ Đã khớp ảnh: ' + matched.name + ' — hãy bấm "Lưu thay đổi"', 'success');
+        } else {
+            showToast('⚠️ Lỗi khi gắn ảnh vào ô upload', 'error');
+        }
+        return ok;
+    }
+
+    /** Mo dialog chon thu muc rieng cho che do don le, doc xong thi tu khop luon. */
+    function singleModePickFolderAndMatch() {
+        if (!SINGLE_MODE.folderInput || !document.body.contains(SINGLE_MODE.folderInput)) {
+            SINGLE_MODE.folderInput = document.createElement('input');
+            SINGLE_MODE.folderInput.type = 'file';
+            SINGLE_MODE.folderInput.webkitdirectory = true;
+            SINGLE_MODE.folderInput.multiple = true;
+            SINGLE_MODE.folderInput.accept = 'image/jpeg,image/png,image/webp,image/jpg';
+            SINGLE_MODE.folderInput.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
+            document.body.appendChild(SINGLE_MODE.folderInput);
+        }
+        try { SINGLE_MODE.folderInput.value = ''; } catch (e) {}
+
+        SINGLE_MODE.folderInput.onchange = function() {
+            var files = SINGLE_MODE.folderInput.files;
+            if (!files || files.length === 0) return;
+            var map = new Map();
+            for (var i = 0; i < files.length; i++) {
+                var f = files[i];
+                if (IMAGE_EXT_RE.test(f.name)) map.set(f.name, f);
+            }
+            SINGLE_MODE.photoMap = map;
+            showToast('📂 Đã đọc ' + map.size + ' ảnh trong thư mục', 'success');
+            setTimeout(singleModeTryMatchAndUpload, 300);
+        };
+        SINGLE_MODE.folderInput.click();
+    }
+
+    /** Kiem tra node click co thuoc vung upload anh tren web hay khong (tai dung logic tu file goc). */
+    function getUploadNodeIfMatch(target) {
         var node = target;
         for (var depth = 0; depth < 10 && node && node !== document.body; depth++) {
-            // Input file truc tiep (khong phai cua ta)
-            if (node.tagName === 'INPUT' && node.type === 'file' && node !== _photoInput) {
+            if (node.tagName === 'INPUT' && node.type === 'file' && node !== SINGLE_MODE.folderInput) {
                 return node;
             }
-            // DevExtreme fileuploader wrapper / button
             if (node.classList && (
                 node.classList.contains('dx-fileuploader-input-wrapper') ||
                 node.classList.contains('dx-fileuploader-button') ||
                 node.classList.contains('dx-fileuploader-input-label') ||
-                node.classList.contains('dx-fileuploader-content')
+                node.classList.contains('dx-fileuploader-content') ||
+                node.classList.contains('avatar-overlay') ||
+                (node.classList.contains('fa-camera'))
             )) {
-                return _findNativeFileInput();
+                return findNativeFileInput();
             }
             node = node.parentElement;
         }
         return null;
     }
 
-    function _setupPhotoInterceptor() {
-        // Mot listener duy nhat, xu ly ca click thuong lan Shift+Click
-        // => tranh viec stopImmediatePropagation cua listener truoc chan listener sau
-        document.addEventListener('click', function(e) {
+    var _singleModeClickHandler = null;
+
+    /** Bat che do "Tu dong khop thong tin": gan listener click chan vung upload anh. */
+    function enableSingleMode() {
+        if (SINGLE_MODE.active) return;
+        SINGLE_MODE.active = true;
+
+        _singleModeClickHandler = function(e) {
+            // Chi can thiep khi trang dang co form chi tiet benh nhan (co field Ngay sinh)
             if (!document.querySelector('.NgaySinh')) return;
 
-            var nativeInput = _getUploadNodeIfMatch(e.target);
+            var nativeInput = getUploadNodeIfMatch(e.target);
             if (!nativeInput) return;
 
-            // Kiem tra tier: Pro va Trial duoc chon thu muc tu dong
-            var tier = getLicenseTier();
-            var effectiveTier = (tier === 'trial') ? 'pro' : (tier === 'lite_weekly') ? 'lite' : tier;
-            if (effectiveTier !== 'pro') {
-                // Ban Lite hoac chua kich hoat: de DevExtreme xu ly binh thuong
-                // (khong chan su kien, mo dialog chon file mac dinh)
-                return;
-            }
-
-            // Ban Pro: chan su kien goc (khong cho DX mo dialog file)
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
 
             if (e.shiftKey) {
-                // Shift+Click -> chon lai thu muc
-                showToast('\ud83d\udcc2 Ch\u1ecdn l\u1ea1i th\u01b0 m\u1ee5c \u1ea3nh...');
-                setTimeout(_pickFolderAndMatch, 150);
+                showToast('📂 Chọn lại thư mục ảnh...', 'warn');
+                setTimeout(singleModePickFolderAndMatch, 150);
                 return;
             }
 
-            if (!_photoMap) {
-                // Chua co thu muc -> bat buoc chon
-                showToast('\ud83d\udcc2 H\u00e3y ch\u1ecdn TH\u01af M\u1ee4C ch\u1ee9a \u1ea3nh b\u1ec7nh nh\u00e2n...');
-                setTimeout(_pickFolderAndMatch, 150);
+            if (!SINGLE_MODE.photoMap) {
+                showToast('📂 Hãy chọn THƯ MỤC chứa ảnh bệnh nhân...', 'warn');
+                setTimeout(singleModePickFolderAndMatch, 150);
             } else {
-                // Da co thu muc -> tim va up thang
-                _tryMatchAndUpload();
+                singleModeTryMatchAndUpload();
             }
-        }, true /* capture — chay truoc DevExtreme */);
+        };
+
+        document.addEventListener('click', _singleModeClickHandler, true /* capture */);
+        showToast('✅ Đã bật "Tự động khớp thông tin". Bấm vào ô ảnh để chọn thư mục.', 'success');
     }
 
-    _setupPhotoInterceptor();
+    /** Tat che do don le (dung khi can chuyen sang che do khac, tranh 2 trinh xu ly cung chan click). */
+    function disableSingleMode() {
+        if (!SINGLE_MODE.active) return;
+        SINGLE_MODE.active = false;
+        if (_singleModeClickHandler) {
+            document.removeEventListener('click', _singleModeClickHandler, true);
+            _singleModeClickHandler = null;
+        }
+    }
 
     // ================================================================
     //  KHOI DONG
@@ -3127,7 +3250,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.17.2';
+        var CURRENT_VERSION = '6.21';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
