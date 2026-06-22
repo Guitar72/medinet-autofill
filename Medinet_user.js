@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.22
+// @version      6.22.9
 // @description  Nut Thao Tac Nhanh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -11,13 +11,47 @@
 // @grant        GM_getValue
 // @grant        unsafeWindow
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
-// @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.meta.js
-// @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js
+// @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.meta.js
+// @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet_user.js
 // ==/UserScript==
 
 (function () {
     'use strict';
 
+    // ================================================================
+    //  FIX QUAN TRONG: dam bao cac doi tuong Event (MouseEvent,
+    //  PointerEvent, KeyboardEvent, DataTransfer...) duoc TAO RA thuoc
+    //  ve REALM (vung nho JS) CUA CHINH TRANG WEB, khong phai cua
+    //  "sandbox" rieng ma Tampermonkey tao ra cho script co khai bao
+    //  @grant (GM_setClipboard, GM_setValue...).
+    //
+    //  LY DO: khi mot Tampermonkey script khai bao @grant cu the (khac
+    //  "none"), no chay trong 1 "sandbox" rieng, tach biet khoi JS
+    //  realm that su cua trang. Neu ta dung "new MouseEvent(...)" hay
+    //  "new PointerEvent(...)" trong sandbox roi dispatch len 1 phan
+    //  tu DOM that cua trang, cac framework nhu Angular/DevExtreme co
+    //  the KHONG nhan dien duoc do la "su kien that" (vi cac kiem tra
+    //  noi bo cua chung, vi du "instanceof MouseEvent", duoc so sanh
+    //  voi class MouseEvent CUA TRANG, khac voi class MouseEvent cua
+    //  sandbox du cung ten). Ket qua: click/nhap lieu tu dong VAN
+    //  "chay" (khong loi) nhung trang web AM THAM bo qua, khong phan
+    //  hoi gi ca - dung trieu chung ban gap: tab "Danh sach" khong
+    //  duoc chuyen, dong ket qua tim kiem khong duoc click.
+    //
+    //  Script "Upload anh hang loat" ban dau dung "@grant none" (KHONG
+    //  sandbox - chay thang trong realm cua trang) nen luon hoat dong
+    //  tot. Khi ghep vao 1 file voi Medinet_user.js (von can cac quyen
+    //  GM_setClipboard/GM_setValue... nen PHAI sandbox), toan bo file
+    //  gop bi dat vao sandbox - day la nguyen nhân that su.
+    //
+    //  CACH FIX: "unsafeWindow" la doi tuong window THAT CUA TRANG ma
+    //  Tampermonkey luon cung cap cho script (du co sandbox hay
+    //  khong). Ta lay cac class Event/MouseEvent/... TU unsafeWindow,
+    //  roi GAN DE (shadow) len bien cuc bo trong pham vi IIFE nay - moi
+    //  noi trong file tu gio goi "new MouseEvent(...)" se tu dong dung
+    //  ban cua unsafeWindow thay vi ban cua sandbox, KHONG can sua tung
+    //  dong code rieng le.
+    // ================================================================
     var _pageWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
     var MouseEvent = _pageWin.MouseEvent;
     var PointerEvent = _pageWin.PointerEvent;
@@ -26,11 +60,46 @@
     var DataTransfer = _pageWin.DataTransfer;
     var HTMLInputElement = _pageWin.HTMLInputElement;
 
+    // ================================================================
+    //  KENH PHOI HOP GIUA "Upload anh thong minh" (don le, phia duoi
+    //  trong file nay) VA "Upload anh hang loat" (Excel/CCCD, duoc
+    //  ghep vao CUOI file nay nhu mot IIFE rieng).
+    //
+    //  LY DO TON TAI: truoc khi co bien nay, neu nguoi dung tung bam
+    //  bat "Upload anh thong minh" (du chi 1 lan trong phien lam viec),
+    //  no se gan 1 listener "click" o muc document, pha CAPTURE, va
+    //  KHONG BAO GIO tu thao go cho den khi load lai trang. Listener
+    //  nay chan (preventDefault/stopImmediatePropagation) BAT KY click
+    //  nao roi vao vung upload anh (icon camera, o input file an cua
+    //  dx-fileuploader) MIEN LA tren form dang co truong "Ngay sinh"
+    //  -- dung HOAN CANH ma "Upload anh hang loat" luon gap phai khi no
+    //  tu dong click vao icon camera cua TUNG benh nhan trong vong lap.
+    //  Ket qua: cac click tu dong cua che do hang loat bi "Upload anh
+    //  thong minh" cuop mat, khien hang loat chay sai/ket/khong on dinh.
+    //
+    //  CACH KHAC PHUC: dung 1 object dung chung tren window de:
+    //   1) "Upload anh hang loat" bao cho "Upload anh thong minh" biet
+    //      no dang chay (batchActive = true) va CHU DONG tat che do
+    //      don le truoc khi bat dau vong lap (goi disableSingleMode()).
+    //   2) Du gi di nua, listener cua che do don le se TU BO QUA moi
+    //      click khi batchActive = true (phong truong hop bi bat lai
+    //      giua chung).
+    //   3) Ca 2 che do dung CHUNG 1 danh sach "hiddenInputs" de biet
+    //      dau la cac <input type=file webkitdirectory> AN do CHINH
+    //      CAC SCRIPT NAY tao ra (de chon thu muc anh), tranh nham lan
+    //      voi o input that cua dx-fileuploader khi tim "o upload that"
+    //      tren form (truoc day moi script chi loai tru o input AN CUA
+    //      RIENG NO, khong biet ve o input AN cua script kia).
+    // ================================================================
     window.__medinetUpload = window.__medinetUpload || {
         batchActive: false,
         hiddenInputs: new Set(),
         disableSingleMode: null // se duoc gan o phan "AUTO UPLOAD ANH THONG MINH" phia duoi
     };
+
+    // ================================================================
+    //  TIEN ICH CHUNG
+    // ================================================================
 
     function pointerClick(el) {
         ['pointerdown', 'pointerup', 'click'].forEach(function(evtName) {
@@ -40,6 +109,8 @@
         });
     }
 
+    // showToast: dinh nghia o phan "AUTO UPLOAD ANH THONG MINH" phia duoi
+    // (ham moi showToast(msg, type) tuong thich nguoc 100% voi cac loi goi showToast(msg) cu)
 
     var nativeSetter = Object.getOwnPropertyDescriptor(_pageWin.HTMLInputElement.prototype, 'value').set;
 
@@ -175,6 +246,10 @@
         }, 800);
     }
 
+
+    // ================================================================
+    //  TIEN ICH CHON DX-SELECT-BOX THEO TEN CLASS FIELD VA LABEL
+    // ================================================================
 
     /**
      * typeAndEnterSelectBox:
@@ -434,6 +509,30 @@
         overlay.querySelector('#_icd_cancel').onclick = function() { overlay.remove(); };
         overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
     }
+
+    // ================================================================
+    //  TIEN ICH FORM HOI BENH NGUOI CAO TUOI (D1-D8)
+    //
+    //  Cau truc DOM thuc te (doc tu HTML):
+    //    <tr role="row">
+    //      <td aria-colindex="1">D1.1</td>   <- ma so
+    //      <td aria-colindex="2">Tăng huyết áp</td>  <- noi dung
+    //      <td aria-colindex="3">           <- cot bac si danh gia
+    //        <div role="listbox">           <- dx-list
+    //          <div role="option">          <- dx-list-item
+    //            <div class="dx-list-select-radiobutton" role="radio" aria-checked="false">
+    //            <div class="dx-item-content dx-list-item-content">Có</div>
+    //          </div>
+    //          <div role="option">... Không ...
+    //        </div>
+    //      </td>
+    //    </tr>
+    //
+    //  => selectNCTRadio(code, label):
+    //     1. Tim <tr> co <td[aria-colindex=1]> = code
+    //     2. Trong <td[aria-colindex=3]>, tim option co text = label
+    //     3. Click vao option do (giong nhu action "Khong/Hau nhu khong")
+    // ================================================================
 
     function selectNCTRadio(code, optLabel) {
         var rows = document.querySelectorAll('tr[role="row"]');
@@ -1593,7 +1692,7 @@
                 // ============================================================
                 var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
                 var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
-                var CURRENT_VERSION = '6.22';
+                var CURRENT_VERSION = '6.22.9';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2803,32 +2902,6 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
-    //  TU DONG DIEN "THONG TIN HANH CHINH" NGAY SAU KHI TAI TRANG
-    //  Doi .DoiTuongKham xuat hien tren DOM (form mo), dien ngay
-    //  ma khong can nguoi dung bam nut. Chi dien 1 lan moi lan mo form.
-    // ================================================================
-    var _autoFillHCDone = false;
-    var _autoFillHCObserver = new MutationObserver(function() {
-        if (_autoFillHCDone) return;
-        if (!document.querySelector('.DoiTuongKham')) return;
-        _autoFillHCDone = true;
-        // Doi them 1 chut de Angular render xong cac control ben trong
-        setTimeout(function() {
-            fillThongTinHanhChinh();
-        }, 800);
-    });
-    _autoFillHCObserver.observe(document.body, { childList: true, subtree: true });
-
-    // Reset co khi URL thay doi (nguoi dung chuyen sang benh nhan khac)
-    var _autoFillHCLastUrl = location.href;
-    setInterval(function() {
-        if (location.href !== _autoFillHCLastUrl) {
-            _autoFillHCLastUrl = location.href;
-            _autoFillHCDone = false;
-        }
-    }, 500);
-
-    // ================================================================
     //  PHIM TAT: Shift + A => an / hien nut "Thao tac nhanh"
     // ================================================================
     var _wrapperHidden = false;
@@ -3403,7 +3476,7 @@
         var AUTO_UPDATE_KEY = '_mtt_auto_update';
         var META_URL = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.meta.js';
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/main/Medinet_user.js';
-        var CURRENT_VERSION = '6.22';
+        var CURRENT_VERSION = '6.22.9';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
