@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.24.0
+// @version      6.22.9
 // @description  Nut Thao Tac Nhanh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
