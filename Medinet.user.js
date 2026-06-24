@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      6.24.7
 // @description  Nut Thao Tac Nhanh
-// @author       Auto-generated
+// @author       Hoang Anh Jupiter - Guitar72
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
