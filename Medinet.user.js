@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.24.6
+// @version      6.24.7
 // @description  Nut Thao Tac Nhanh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -15,50 +15,10 @@
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js
 // ==/UserScript==
 
-// ==Changelog==
-// (Khi ra ban moi: them 1 dong MOI o ngay duoi dong nay, dung dinh dang:
-//  X.Y.Z | YYYY-MM-DD | Y 1 • Y 2 • Y 3  -- dau • de tach nhieu y trong cung ban)
-// 6.24.6 | 2026-06-24 | Nâng cấp bảo mật Mã máy (Machine ID): kết hợp GPU/canvas/font... giảm khả năng trùng mã giữa 2 máy cùng cấu hình • Sửa lỗi hiển thị sai phiên bản hiện tại trong khung kiểm tra cập nhật • Thêm khung "Có gì mới" hiển thị thay đổi khi có bản mới
-// 6.23.0 | 2026-06-24 | Menu "Thao tác nhanh" thông minh hơn: ẩn hẳn mục không khả dụng trên trang hiện tại (trước đây chỉ làm mờ) • "KSK Việc làm + Lái xe" chỉ hiện đúng 1 trang quy định • Ẩn/hiện mục con theo chuyên khoa trong submenu KSK Việc làm + Lái xe
-// ==/Changelog==
-
 (function () {
     'use strict';
 
-    // ================================================================
-    //  FIX QUAN TRONG: dam bao cac doi tuong Event (MouseEvent,
-    //  PointerEvent, KeyboardEvent, DataTransfer...) duoc TAO RA thuoc
-    //  ve REALM (vung nho JS) CUA CHINH TRANG WEB, khong phai cua
-    //  "sandbox" rieng ma Tampermonkey tao ra cho script co khai bao
-    //  @grant (GM_setClipboard, GM_setValue...).
-    //
-    //  LY DO: khi mot Tampermonkey script khai bao @grant cu the (khac
-    //  "none"), no chay trong 1 "sandbox" rieng, tach biet khoi JS
-    //  realm that su cua trang. Neu ta dung "new MouseEvent(...)" hay
-    //  "new PointerEvent(...)" trong sandbox roi dispatch len 1 phan
-    //  tu DOM that cua trang, cac framework nhu Angular/DevExtreme co
-    //  the KHONG nhan dien duoc do la "su kien that" (vi cac kiem tra
-    //  noi bo cua chung, vi du "instanceof MouseEvent", duoc so sanh
-    //  voi class MouseEvent CUA TRANG, khac voi class MouseEvent cua
-    //  sandbox du cung ten). Ket qua: click/nhap lieu tu dong VAN
-    //  "chay" (khong loi) nhung trang web AM THAM bo qua, khong phan
-    //  hoi gi ca - dung trieu chung ban gap: tab "Danh sach" khong
-    //  duoc chuyen, dong ket qua tim kiem khong duoc click.
-    //
-    //  Script "Upload anh hang loat" ban dau dung "@grant none" (KHONG
-    //  sandbox - chay thang trong realm cua trang) nen luon hoat dong
-    //  tot. Khi ghep vao 1 file voi Medinet_user.js (von can cac quyen
-    //  GM_setClipboard/GM_setValue... nen PHAI sandbox), toan bo file
-    //  gop bi dat vao sandbox - day la nguyen nhân that su.
-    //
-    //  CACH FIX: "unsafeWindow" la doi tuong window THAT CUA TRANG ma
-    //  Tampermonkey luon cung cap cho script (du co sandbox hay
-    //  khong). Ta lay cac class Event/MouseEvent/... TU unsafeWindow,
-    //  roi GAN DE (shadow) len bien cuc bo trong pham vi IIFE nay - moi
-    //  noi trong file tu gio goi "new MouseEvent(...)" se tu dong dung
-    //  ban cua unsafeWindow thay vi ban cua sandbox, KHONG can sua tung
-    //  dong code rieng le.
-    // ================================================================
+    // Fix: lay cac class Event tu unsafeWindow de hoat dong dung trong sandbox Tampermonkey
     var _pageWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
     var MouseEvent = _pageWin.MouseEvent;
     var PointerEvent = _pageWin.PointerEvent;
@@ -67,37 +27,7 @@
     var DataTransfer = _pageWin.DataTransfer;
     var HTMLInputElement = _pageWin.HTMLInputElement;
 
-    // ================================================================
-    //  KENH PHOI HOP GIUA "Upload anh thong minh" (don le, phia duoi
-    //  trong file nay) VA "Upload anh hang loat" (Excel/CCCD, duoc
-    //  ghep vao CUOI file nay nhu mot IIFE rieng).
-    //
-    //  LY DO TON TAI: truoc khi co bien nay, neu nguoi dung tung bam
-    //  bat "Upload anh thong minh" (du chi 1 lan trong phien lam viec),
-    //  no se gan 1 listener "click" o muc document, pha CAPTURE, va
-    //  KHONG BAO GIO tu thao go cho den khi load lai trang. Listener
-    //  nay chan (preventDefault/stopImmediatePropagation) BAT KY click
-    //  nao roi vao vung upload anh (icon camera, o input file an cua
-    //  dx-fileuploader) MIEN LA tren form dang co truong "Ngay sinh"
-    //  -- dung HOAN CANH ma "Upload anh hang loat" luon gap phai khi no
-    //  tu dong click vao icon camera cua TUNG benh nhan trong vong lap.
-    //  Ket qua: cac click tu dong cua che do hang loat bi "Upload anh
-    //  thong minh" cuop mat, khien hang loat chay sai/ket/khong on dinh.
-    //
-    //  CACH KHAC PHUC: dung 1 object dung chung tren window de:
-    //   1) "Upload anh hang loat" bao cho "Upload anh thong minh" biet
-    //      no dang chay (batchActive = true) va CHU DONG tat che do
-    //      don le truoc khi bat dau vong lap (goi disableSingleMode()).
-    //   2) Du gi di nua, listener cua che do don le se TU BO QUA moi
-    //      click khi batchActive = true (phong truong hop bi bat lai
-    //      giua chung).
-    //   3) Ca 2 che do dung CHUNG 1 danh sach "hiddenInputs" de biet
-    //      dau la cac <input type=file webkitdirectory> AN do CHINH
-    //      CAC SCRIPT NAY tao ra (de chon thu muc anh), tranh nham lan
-    //      voi o input that cua dx-fileuploader khi tim "o upload that"
-    //      tren form (truoc day moi script chi loai tru o input AN CUA
-    //      RIENG NO, khong biet ve o input AN cua script kia).
-    // ================================================================
+    // Kenh phoi hop giua "Upload anh thong minh" va "Upload anh hang loat"
     window.__medinetUpload = window.__medinetUpload || {
         batchActive: false,
         hiddenInputs: new Set(),
@@ -254,17 +184,6 @@
     }
 
 
-    // ================================================================
-    //  TIEN ICH CHON DX-SELECT-BOX THEO TEN CLASS FIELD VA LABEL
-    // ================================================================
-
-    /**
-     * typeAndEnterSelectBox:
-     * Go text truc tiep vao mainInput cua select-box, doi filter,
-     * roi bam Enter de chon ket qua dau tien.
-     * Dung cho o Xa/Phuong vi dropdown khong co search popup rieng
-     * ma phai go vao chinh input chinh roi Enter.
-     */
     function typeAndEnterSelectBox(fieldCls, label, cb) {
         var fieldItem = document.querySelector('.' + fieldCls);
         if (!fieldItem) { if (cb) cb(); return; }
@@ -308,11 +227,6 @@
         }, 50);
     }
 
-    /**
-     * selectDxSelectBox:
-     * Mo dropdown, neu co search input thi go text de loc,
-     * sau do chon item dau tien khop voi label.
-     */
     function selectDxSelectBox(fieldCls, label, cb) {
         var fieldItem = document.querySelector('.' + fieldCls);
         if (!fieldItem) { if (cb) cb(); return; }
@@ -517,30 +431,6 @@
         overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
     }
 
-    // ================================================================
-    //  TIEN ICH FORM HOI BENH NGUOI CAO TUOI (D1-D8)
-    //
-    //  Cau truc DOM thuc te (doc tu HTML):
-    //    <tr role="row">
-    //      <td aria-colindex="1">D1.1</td>   <- ma so
-    //      <td aria-colindex="2">Tăng huyết áp</td>  <- noi dung
-    //      <td aria-colindex="3">           <- cot bac si danh gia
-    //        <div role="listbox">           <- dx-list
-    //          <div role="option">          <- dx-list-item
-    //            <div class="dx-list-select-radiobutton" role="radio" aria-checked="false">
-    //            <div class="dx-item-content dx-list-item-content">Có</div>
-    //          </div>
-    //          <div role="option">... Không ...
-    //        </div>
-    //      </td>
-    //    </tr>
-    //
-    //  => selectNCTRadio(code, label):
-    //     1. Tim <tr> co <td[aria-colindex=1]> = code
-    //     2. Trong <td[aria-colindex=3]>, tim option co text = label
-    //     3. Click vao option do (giong nhu action "Khong/Hau nhu khong")
-    // ================================================================
-
     function selectNCTRadio(code, optLabel) {
         var rows = document.querySelectorAll('tr[role="row"]');
         for (var i = 0; i < rows.length; i++) {
@@ -567,10 +457,6 @@
         }
     }
 
-    /**
-     * selectNCTRadioBulk: Chon hang loat, delay nho giua moi click
-     * list: [{code, opt}, ...]
-     */
     function selectNCTRadioBulk(list, doneCallback) {
         var idx = 0;
         function next() {
@@ -585,36 +471,30 @@
         next();
     }
 
-    // Danh sach radio can chon cho preset "Benh nen THA & DTD"
     var NCT_THA_DTD = [
-        // D1 - Header nhom benh nen
-        { code: 'D1',    opt: 'Có' },        // Ong, ba co dang hoac da tung mac...
-        // D1 - Benh nen
-        { code: 'D1.1',  opt: 'Có' },        // Tang huyet ap -> Co
-        { code: 'D1.2',  opt: 'Có' },        // Dai thao duong -> Co
+        { code: 'D1',    opt: 'Có' },
+        { code: 'D1.1',  opt: 'Có' },
+        { code: 'D1.2',  opt: 'Có' },
         { code: 'D1.3',  opt: 'Không' },
         { code: 'D1.4',  opt: 'Không' },
         { code: 'D1.5',  opt: 'Không' },
         { code: 'D1.6',  opt: 'Không' },
         { code: 'D1.7',  opt: 'Không' },
         { code: 'D1.8',  opt: 'Không' },
-        { code: 'D1.9',  opt: 'Có' },        // Benh tim thieu mau cuc bo -> Co
+        { code: 'D1.9',  opt: 'Có' },
         { code: 'D1.10', opt: 'Không' },
         { code: 'D1.11', opt: 'Không' },
         { code: 'D1.12', opt: 'Không' },
         { code: 'D1.13', opt: 'Không' },
         { code: 'D1.14', opt: 'Không' },
-        // D2 - Tam soat Dai thao duong
         { code: 'D2.1',  opt: 'Có' },
         { code: 'D2.2',  opt: 'Có' },
         { code: 'D2.3',  opt: 'Có' },
         { code: 'D2.4',  opt: 'Có' },
         { code: 'D2.5',  opt: 'Không' },
-        // D3 - Tam soat COPD
         { code: 'D3.1',  opt: 'Không' },
         { code: 'D3.2',  opt: 'Không' },
         { code: 'D3.3',  opt: 'Không' },
-        // D4 - Tam soat Hen
         { code: 'D4.1',  opt: 'Không' },
         { code: 'D4.2',  opt: 'Không' },
         { code: 'D4.3',  opt: 'Không' },
@@ -623,7 +503,6 @@
         { code: 'D4.6',  opt: 'Không' },
         { code: 'D4.7',  opt: 'Không' },
         { code: 'D4.8',  opt: 'Không' },
-        // D5 - Tam soat Ung thu
         { code: 'D5.1',  opt: 'Không' },
         { code: 'D5.2',  opt: 'Không' },
         { code: 'D5.3',  opt: 'Không' },
@@ -635,7 +514,6 @@
         { code: 'D5.9',  opt: 'Không' },
         { code: 'D5.10', opt: 'Không' },
         { code: 'D5.11', opt: 'Không' },
-        // D6 - Tram cam PHQ-9
         { code: 'D6.1',  opt: 'Hầu như không' },
         { code: 'D6.2',  opt: 'Hầu như không' },
         { code: 'D6.3',  opt: 'Hầu như không' },
@@ -645,7 +523,6 @@
         { code: 'D6.7',  opt: 'Hầu như không' },
         { code: 'D6.8',  opt: 'Hầu như không' },
         { code: 'D6.9',  opt: 'Hầu như không' },
-        // D7 - Lo au GAD-7
         { code: 'D7.1',  opt: 'Hầu như không' },
         { code: 'D7.2',  opt: 'Hầu như không' },
         { code: 'D7.3',  opt: 'Một vài ngày' },
@@ -653,31 +530,26 @@
         { code: 'D7.5',  opt: 'Hầu như không' },
         { code: 'D7.6',  opt: 'Hầu như không' },
         { code: 'D7.7',  opt: 'Hầu như không' },
-        // D8.1 - Sinh hoat co ban
         { code: 'D8.1.1', opt: 'Có' },
         { code: 'D8.1.2', opt: 'Có' },
         { code: 'D8.1.3', opt: 'Có' },
         { code: 'D8.1.4', opt: 'Có' },
         { code: 'D8.1.5', opt: 'Có' },
         { code: 'D8.1.6', opt: 'Có' },
-        // D8.2 - Sinh hoat hang ngay
         { code: 'D8.2.1', opt: 'Có' },
         { code: 'D8.2.2', opt: 'Có' },
         { code: 'D8.2.3', opt: 'Có' },
         { code: 'D8.2.4', opt: 'Có' },
         { code: 'D8.2.5', opt: 'Có' },
-        { code: 'D8.2.6', opt: 'Không' },   // Lai xe -> Khong
+        { code: 'D8.2.6', opt: 'Không' },
         { code: 'D8.2.7', opt: 'Có' },
         { code: 'D8.2.8', opt: 'Có' },
-        // D8.3 - Suy yeu
         { code: 'D8.3.1', opt: 'Không/Một số lần' },
         { code: 'D8.3.2', opt: 'Không' },
         { code: 'D8.3.3', opt: 'Không' },
-        // D8.4 - Te nga
         { code: 'D8.4.1', opt: 'Không' },
         { code: 'D8.4.2', opt: 'Không' },
         { code: 'D8.4.3', opt: 'Không' },
-        // D8.5 - Giam nhan thuc
         { code: 'D8.5.1', opt: 'Có' },
         { code: 'D8.5.2', opt: 'Có' },
         { code: 'D8.5.3', opt: 'Không' },
@@ -735,25 +607,16 @@
             gap: '6px',
         });
 
-        // Index nhom tuoi hien tai (0-4), null neu khong doc duoc
         var ageIdx = getAgeGroupIndex(getPatientAge());
-        // subItems[0..4] la 5 nhom tuoi, subItems[5] la THA&DTD (luon sang)
         var AGE_ITEM_COUNT = 5;
 
         var visibleSubCount = 0;
         subItems.forEach(function(sub, i) {
-            // Neu sub item co ham check() rieng (vi du cac muc trong "KSK Viec
-            // lam + Lai xe" - chi kha dung khi co dung truong chuyen khoa tren
-            // trang), AN HOAN TOAN khi khong kha dung, thay vi chi lam mo.
             if (sub.check && !sub.check()) return;
 
             var btn = document.createElement('button');
             btn.innerHTML = (sub.emoji ? '<span style="margin-right:6px">' + sub.emoji + '</span>' : '') + sub.label;
 
-            // Xac dinh sang/mo:
-            // - Nhom tuoi (i < AGE_ITEM_COUNT): sang neu dung nhom, mo neu sai nhom
-            //   (neu khong doc duoc tuoi thi tat ca deu sang binh thuong)
-            // - THA&DTD (i >= AGE_ITEM_COUNT): luon sang
             var dimmed = !noAgeLogic && (i < AGE_ITEM_COUNT) && (ageIdx !== null) && (i !== ageIdx);
 
             Object.assign(btn.style, {
@@ -799,7 +662,6 @@
 
         document.body.appendChild(sm);
 
-        // Vi tri: luon hien BEN PHAI menu chinh, chi sang trai neu khong du cho
         var rect = parentItem.getBoundingClientRect();
         var smW  = sm.offsetWidth || 240;
         var smH  = sm.offsetHeight || 200;
@@ -884,14 +746,18 @@
                 return window.location.href.indexOf('KSKDK_ThongTinKham') !== -1;
             },
             fn: function() {
+                // Dong bo logic voi "Thong tin kham NCT binh thuong (M14)":
+                // resetAll -> tick toan bo "Chua phat hien bat thuong" -> chon
+                // "Loai I" toan bo -> dien thi luc khong kinh 10/10 -> dien
+                // so TMH mac dinh.
                 resetAll();
                 setTimeout(function() {
                     tickAllChuaPhatHien([]);
-                    selectRadioWithException('__none__', 'Lo\u1ea1i I', 'Lo\u1ea1i I');
+                    selectRadioMultiException([], '', 'Lo\u1ea1i I');
                     setNumberField('Mat_KhongKinh_MP', '10');
                     setNumberField('Mat_KhongKinh_MT', '10');
                     fillCommonNumbers();
-                    showToast('\ud83d\udcdd \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I (M13)');
+                    showToast('\ud83d\udcdd \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I (M13)');
                 }, 400);
             }
         },
@@ -1445,15 +1311,11 @@
             fn: function() {
                 resetAll();
                 setTimeout(function() {
-                    // Tick "Chua phat hien bat thuong" cho TAT CA cac chuyen khoa
-                    // (ke ca Noi Khoa, Mat, RHM)
                     tickAllChuaPhatHien([]);
-
-                    // Chon Loai I cho TAT CA cac chuyen khoa (khong co exception)
                     selectRadioMultiException([], '', 'Lo\u1ea1i I');
-
+                    setNumberField('Mat_KhongKinh_MP', '10');
+                    setNumberField('Mat_KhongKinh_MT', '10');
                     fillCommonNumbers();
-
                     showToast('\u2705 NCT b\u00ecnh th\u01b0\u1eddng \u2014 \u0111\u00e3 tick Ch\u01b0a ph\u00e1t hi\u1ec7n + Lo\u1ea1i I to\u00e0n b\u1ed9!');
                 }, 400);
             }
@@ -1469,33 +1331,21 @@
             fn: function() {
                 resetAll();
                 setTimeout(function() {
-                    // Tick "Chua phat hien" cho tat ca NGOAI Noi Khoa, Mat, RHM
                     tickAllChuaPhatHien(['NoiKhoa_ChuaPhatHienBatThuong', 'Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong']);
-
-                    // Bo tick "Chua phat hien" cho Noi Khoa, Mat, RHM (vi chon Loai III)
                     ['NoiKhoa_ChuaPhatHienBatThuong', 'Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong'].forEach(function(cls) {
                         var cb = document.querySelector('.' + cls + ' dx-check-box[role="checkbox"]');
                         if (cb) untickCheckbox(cb);
                     });
-
-                    // Chon Loai III cho Noi Khoa, Mat, RHM; Loai I cho tat ca con lai
                     selectRadioMultiException(['NoiKhoa_PhanLoai', 'Mat_PhanLoai', 'RHM_PhanLoai'], 'Lo\u1ea1i III', 'Lo\u1ea1i I');
-
                     fillCommonNumbers();
-
-                    // ICD Noi Khoa: I10, I25.5, E11 (lan luot, moi code cach 1.5s)
                     ['I10', 'I25.5', 'E11.9'].forEach(function(code, idx) {
                         setTimeout(function() {
                             fillTagBox('NoiKhoa_ChanDoanXacDinh_ICD', code);
                         }, 1500 * (idx + 1));
                     });
-
-                    // ICD Mat: H25.0
                     setTimeout(function() {
                         fillTagBox('Mat_ChanDoanXacDinh_ICD', 'H25.0');
                     }, 1500 * 4);
-
-                    // ICD RHM: K08.1
                     setTimeout(function() {
                         fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1');
                         showToast('\ud83c\udfe5 Th\u00f4ng tin kh\u00e1m NCT b\u1ec7nh l\u00fd \u0111\u00e3 \u0111i\u1ec1n xong!');
@@ -1720,7 +1570,7 @@
                 // Lay phien ban hien tai TU CHINH GM_info (Tampermonkey tu dong bom
                 // san, luon khop voi @version trong header) - khong hardcode chuoi
                 // rieng nua de tranh bi le voi header nhu truoc day.
-                var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.24.6';
+                var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.24.7';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -3039,7 +2889,6 @@
     }
 
     function tryInjectIntoContainer(container) {
-        // Kiem tra co nut "Luu thay doi" khong (dieu kien can)
         var saveBtnEl = null;
         container.querySelectorAll('dx-button[aria-label]').forEach(function(btn) {
             if (!saveBtnEl && (btn.getAttribute('aria-label') || '').indexOf('Lưu thay đổi') !== -1)
@@ -3047,16 +2896,13 @@
         });
         if (!saveBtnEl) return;
 
-        // Lay hoac tao wrapper
         var wrapper = container.querySelector('#' + WRAPPER_ID);
         if (!wrapper) {
             wrapper = buildWrapper();
-            // Bo order CSS, dung vi tri DOM thuc de dinh vi
             wrapper.style.order = '';
-            container.appendChild(wrapper); // tam chen vao, se doi vi tri ngay duoi
+            container.appendChild(wrapper);
             if (_injectedContainers) _injectedContainers.add(container);
 
-            // Theo doi: neu wrapper bi Angular tach ra, xoa dau kiem de inject lai
             var wrapperObserver = new MutationObserver(function() {
                 if (!container.contains(wrapper)) {
                     wrapperObserver.disconnect();
@@ -3066,7 +2912,6 @@
             wrapperObserver.observe(container, { childList: true });
         }
 
-        // Dat wrapper vao dung vi tri: sau "Them moi phieu", truoc "Luu thay doi"
         ensureWrapperPosition(container, wrapper);
     }
 
@@ -3076,18 +2921,11 @@
         });
     }
 
-    // ================================================================
-    //  OBSERVER: lang nghe moi khi co phan tu moi them vao DOM
-    //  Neu phan tu do LA hoac CHUA footer-dynamic-form_btn_container => inject ngay
-    // ================================================================
-
     var observer = new MutationObserver(function(mutations) {
         for (var i = 0; i < mutations.length; i++) {
             var target = mutations[i].target;
             var added  = mutations[i].addedNodes;
 
-            // Neu target chinh la container (Angular them/xoa ng-star-inserted con)
-            // => goi lai de dam bao wrapper dung vi tri
             if (target && target.classList && target.classList.contains('footer-dynamic-form_btn_container')) {
                 tryInjectIntoContainer(target);
                 continue;
@@ -3096,19 +2934,15 @@
             for (var j = 0; j < added.length; j++) {
                 var node = added[j];
                 if (node.nodeType !== 1) continue;
-                // Neu chinh no la container
                 if (node.classList && node.classList.contains('footer-dynamic-form_btn_container')) {
                     tryInjectIntoContainer(node);
                     break;
                 }
-                // Neu chua container ben trong
                 var inner = node.querySelector && node.querySelector('.footer-dynamic-form_btn_container');
                 if (inner) {
                     tryInjectIntoContainer(inner);
                     break;
                 }
-                // Neu node duoc them vao la con cua container
-                // (Angular them ng-star-inserted => wrapper co the bi doi cho)
                 var parent = node.parentElement;
                 if (parent && parent.classList && parent.classList.contains('footer-dynamic-form_btn_container')) {
                     tryInjectIntoContainer(parent);
@@ -3118,6 +2952,128 @@
         }
     });
     observer.observe(document.body, { childList: true, subtree: true });
+
+    // ================================================================
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M14)
+    //  - Chon Loai I  => tick "Chua phat hien" + xoa ICD
+    //  - Tick "Chua phat hien" => chon Loai I + xoa ICD
+    //  - Bo tick "Chua phat hien" => bo chon Loai I (tat ca radio)
+    //  - Chon Loai II..V => bo tick "Chua phat hien" + xoa ICD
+    // ================================================================
+    var M14_SPECIALTIES = [
+        { radio: 'NoiKhoa_PhanLoai',  cb: 'NoiKhoa_ChuaPhatHienBatThuong',  icds: ['NoiKhoa_ChanDoanSoBo_ICD',  'NoiKhoa_ChanDoanXacDinh_ICD']  },
+        { radio: 'NgoaiKhoa_PhanLoai', cb: 'NgoaiKhoa_ChuaPhatHienBatThuong', icds: ['NgoaiKhoa_ChanDoanSoBo_ICD', 'NgoaiKhoa_ChanDoanXacDinh_ICD'] },
+        { radio: 'DaLieu_PhanLoai',    cb: 'DaLieu_ChuaPhatHienBatThuong',    icds: ['DaLieu_ChanDoanSoBo_ICD',   'DaLieu_ChanDoanXacDinh_ICD']   },
+        { radio: 'SanKhoa_PhanLoai',   cb: 'SanKhoa_ChuaPhatHienBatThuong',   icds: ['SanKhoa_ChanDoanSoBo_ICD',  'SanKhoa_ChanDoanXacDinh_ICD']  },
+        { radio: 'PhuKhoa_PhanLoai',   cb: 'PhuKhoa_ChuaPhatHienBatThuong',   icds: ['PhuKhoa_ChanDoanSoBo_ICD',  'PhuKhoa_ChanDoanXacDinh_ICD']  },
+        { radio: 'Mat_PhanLoai',       cb: 'Mat_ChuaPhatHienBatThuong',       icds: ['Mat_ChanDoanSoBo_ICD',      'Mat_ChanDoanXacDinh_ICD']      },
+        { radio: 'TMH_PhanLoai',       cb: 'TMH_ChuaPhatHienBatThuong',       icds: ['TMH_ChanDoanSoBo_ICD',      'TMH_ChanDoanXacDinh_ICD']      },
+        { radio: 'RHM_PhanLoai',       cb: 'RHM_ChuaPhatHienBatThuong',       icds: ['RHM_ChanDoanSoBo_ICD',      'RHM_ChanDoanXacDinh_ICD']      },
+    ];
+
+    var _m14SyncGuard = false;
+
+    function m14GetSelectedLabel(radioContainerCls) {
+        var container = document.querySelector('.' + radioContainerCls);
+        if (!container) return null;
+        var selected = container.querySelector('.dx-list-item-selected .dx-item-content.dx-list-item-content');
+        return selected ? (selected.textContent || '').trim() : null;
+    }
+
+    function m14SelectLoaiI(radioContainerCls) {
+        var container = document.querySelector('.' + radioContainerCls);
+        if (!container) return;
+        var items = container.querySelectorAll('.dx-item.dx-list-item[role="option"]');
+        for (var i = 0; i < items.length; i++) {
+            var lbl = items[i].querySelector('.dx-item-content.dx-list-item-content');
+            if (lbl && (lbl.textContent || '').trim() === 'Lo\u1ea1i I') {
+                if (!items[i].classList.contains('dx-list-item-selected')) {
+                    pointerClick(items[i]);
+                    var icon = items[i].querySelector('.dx-radiobutton-icon');
+                    if (icon) pointerClick(icon);
+                }
+                break;
+            }
+        }
+    }
+
+    function m14SyncFromRadio(spec, selectedLabel) {
+        if (_m14SyncGuard) return;
+        _m14SyncGuard = true;
+        try {
+            var cb = document.querySelector('.' + spec.cb + ' dx-check-box[role="checkbox"]');
+            if (selectedLabel === 'Lo\u1ea1i I') {
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
+                if (cb && cb.getAttribute('aria-checked') !== 'true') tickCheckbox(cb);
+            } else {
+                if (cb && cb.getAttribute('aria-checked') === 'true') untickCheckbox(cb);
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
+            }
+        } finally {
+            setTimeout(function() { _m14SyncGuard = false; }, 50);
+        }
+    }
+
+    function m14SyncFromCheckbox(spec, checked) {
+        if (_m14SyncGuard) return;
+        _m14SyncGuard = true;
+        try {
+            if (checked) {
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
+                m14SelectLoaiI(spec.radio);
+            } else {
+                var current = m14GetSelectedLabel(spec.radio);
+                if (current === 'Lo\u1ea1i I') {
+                    var container = document.querySelector('.' + spec.radio);
+                    if (container) {
+                        var sel = container.querySelector('.dx-list-item-selected');
+                        if (sel) pointerClick(sel);
+                    }
+                }
+            }
+        } finally {
+            setTimeout(function() { _m14SyncGuard = false; }, 50);
+        }
+    }
+
+    function setupM14Sync() {
+        if (window.location.href.indexOf('KNCT_ThongTinKham') === -1) return;
+
+        M14_SPECIALTIES.forEach(function(spec) {
+            var radioContainer = document.querySelector('.' + spec.radio);
+            var cbContainer = document.querySelector('.' + spec.cb);
+            if (!radioContainer || !cbContainer) return;
+
+            radioContainer.addEventListener('click', function(e) {
+                var item = e.target.closest('.dx-item.dx-list-item[role="option"]');
+                if (!item) return;
+                setTimeout(function() {
+                    var lbl = m14GetSelectedLabel(spec.radio);
+                    if (lbl) m14SyncFromRadio(spec, lbl);
+                }, 80);
+            }, true);
+
+            cbContainer.addEventListener('click', function() {
+                setTimeout(function() {
+                    var cb = cbContainer.querySelector('dx-check-box[role="checkbox"]');
+                    if (!cb) return;
+                    var isChecked = cb.getAttribute('aria-checked') === 'true';
+                    m14SyncFromCheckbox(spec, isChecked);
+                }, 80);
+            }, true);
+        });
+    }
+
+    var _m14SyncSetup = false;
+    var m14SyncObserver = new MutationObserver(function() {
+        if (_m14SyncSetup) return;
+        if (window.location.href.indexOf('KNCT_ThongTinKham') === -1) return;
+        if (!document.querySelector('.NoiKhoa_PhanLoai')) return;
+        _m14SyncSetup = true;
+        m14SyncObserver.disconnect();
+        setupM14Sync();
+    });
+    m14SyncObserver.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
     //  PHIM TAT: Shift + A => an / hien nut "Thao tac nhanh"
@@ -3696,7 +3652,7 @@
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js';
         // Lay phien ban hien tai TU CHINH GM_info, khong hardcode (xem giai
         // thich o khoi "Kiem tra cap nhat" thu cong phia tren).
-        var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.24.6';
+        var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.24.7';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
