@@ -2954,12 +2954,26 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
-    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M14)
-    //  - Chon Loai I  => tick "Chua phat hien" + xoa ICD
-    //  - Tick "Chua phat hien" => chon Loai I + xoa ICD
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong"
+    //  (Ap dung cho: NCT binh thuong/benh ly (M14), Kham >18 tuoi (M13),
+    //   KSK Viec lam + Lai xe)
+    //  - Chon Loai I        => tick "Chua phat hien" + xoa Chan doan so bo/
+    //                           xac dinh (ICD)
+    //  - Tick "Chua phat hien" => chon Loai I + xoa Chan doan so bo/xac dinh
     //  - Bo tick "Chua phat hien" => bo chon Loai I (tat ca radio)
-    //  - Chon Loai II..V => bo tick "Chua phat hien" + xoa ICD
+    //  - Chon Loai II/III/IV/V => chi bo tick "Chua phat hien", KHONG xoa
+    //                              Chan doan so bo/xac dinh da nhap (du
+    //                              doi qua lai giua II/III/IV/V). Chi xoa
+    //                              khi nguoi dung chon LAI "Loai I".
     // ================================================================
+    var M14_SYNC_URL_PATTERNS = ['KNCT_ThongTinKham', 'KSKDK_ThongTinKham', 'kskdk_thongtinkhamtren18'];
+    function isM14SyncPage() {
+        var href = window.location.href;
+        for (var i = 0; i < M14_SYNC_URL_PATTERNS.length; i++) {
+            if (href.indexOf(M14_SYNC_URL_PATTERNS[i]) !== -1) return true;
+        }
+        return false;
+    }
     var M14_SPECIALTIES = [
         { radio: 'NoiKhoa_PhanLoai',  cb: 'NoiKhoa_ChuaPhatHienBatThuong',  icds: ['NoiKhoa_ChanDoanSoBo_ICD',  'NoiKhoa_ChanDoanXacDinh_ICD']  },
         { radio: 'NgoaiKhoa_PhanLoai', cb: 'NgoaiKhoa_ChuaPhatHienBatThuong', icds: ['NgoaiKhoa_ChanDoanSoBo_ICD', 'NgoaiKhoa_ChanDoanXacDinh_ICD'] },
@@ -3006,8 +3020,11 @@
                 spec.icds.forEach(function(cls) { clearTagBox(cls); });
                 if (cb && cb.getAttribute('aria-checked') !== 'true') tickCheckbox(cb);
             } else {
+                // Loai II/III/IV/V: chi bo tick "Chua phat hien bat thuong".
+                // KHONG xoa Chan doan so bo / xac dinh (ICD) da nhap, du
+                // doi qua lai giua cac Loai II/III/IV/V. Chi xoa khi chon
+                // LAI "Loai I" (nhanh tren).
                 if (cb && cb.getAttribute('aria-checked') === 'true') untickCheckbox(cb);
-                spec.icds.forEach(function(cls) { clearTagBox(cls); });
             }
         } finally {
             setTimeout(function() { _m14SyncGuard = false; }, 50);
@@ -3037,12 +3054,17 @@
     }
 
     function setupM14Sync() {
-        if (window.location.href.indexOf('KNCT_ThongTinKham') === -1) return;
+        if (!isM14SyncPage()) return;
 
         M14_SPECIALTIES.forEach(function(spec) {
             var radioContainer = document.querySelector('.' + spec.radio);
             var cbContainer = document.querySelector('.' + spec.cb);
             if (!radioContainer || !cbContainer) return;
+            // Tranh gan trung listener khi setupM14Sync duoc goi lai nhieu lan
+            // (vi du khi dieu huong qua lai giua cac trang M13/M14/KSKLX)
+            if (radioContainer.__m14SyncBound) return;
+            radioContainer.__m14SyncBound = true;
+            cbContainer.__m14SyncBound = true;
 
             radioContainer.addEventListener('click', function(e) {
                 var item = e.target.closest('.dx-item.dx-list-item[role="option"]');
@@ -3064,13 +3086,12 @@
         });
     }
 
-    var _m14SyncSetup = false;
     var m14SyncObserver = new MutationObserver(function() {
-        if (_m14SyncSetup) return;
-        if (window.location.href.indexOf('KNCT_ThongTinKham') === -1) return;
-        if (!document.querySelector('.NoiKhoa_PhanLoai')) return;
-        _m14SyncSetup = true;
-        m14SyncObserver.disconnect();
+        if (!isM14SyncPage()) return;
+        var hasAnyPhanLoai = document.querySelector('.NoiKhoa_PhanLoai') ||
+                              document.querySelector('.Mat_PhanLoai') ||
+                              document.querySelector('.RHM_PhanLoai');
+        if (!hasAnyPhanLoai) return;
         setupM14Sync();
     });
     m14SyncObserver.observe(document.body, { childList: true, subtree: true });
