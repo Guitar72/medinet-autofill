@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.24.7
+// @version      6.29
 // @description  Nut Thao Tac Nhanh
-// @author       Hoang Anh Jupiter - Guitar72
+// @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
 // @grant        GM_openInTab

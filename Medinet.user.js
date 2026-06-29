@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.24.7
+// @version      6.29
 // @description  Nut Thao Tac Nhanh
-// @author       Hoang Anh Jupiter - Guitar72
+// @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
@@ -268,6 +268,13 @@
                     if (allInputs.length > 0) searchInput = allInputs[allInputs.length - 1];
                 }
             }
+            // Mot so dx-select-box (vd: "Nghe nghiep") KHONG render search box
+            // rieng trong popup - viec loc duoc thuc hien ngay tren CHINH input
+            // chinh cua select-box (nhan biet qua aria-autocomplete="list").
+            // Neu khong tim duoc searchInput trong popup, dung luon mainInput.
+            if (!searchInput && mainInput && mainInput.getAttribute('aria-autocomplete') === 'list') {
+                searchInput = mainInput;
+            }
 
             function doSearch(inp) {
                 inp.focus({ preventScroll: true });
@@ -357,28 +364,61 @@
 
     function fillThongTinHanhChinh() {
         showToast('\u23f3 \u0110ang \u0111i\u1ec1n Th\u00f4ng tin h\u00e0nh ch\u00ednh...');
-        // B1: Xa/Phuong -> "Xa Bac Tan Uyen"
-        typeAndEnterSelectBox('DiaChiHienTai_XaPhuong', 'X\u00e3 B\u1eafc T\u00e2n Uy\u00ean', function() {
-            // B2: Hinh thuc chi tra -> "Ngan sach thanh pho ho tro"
+
+        // Trang rieng: KSK Viec lam + Lai xe
+        // (kskdk_thongtinkhamtren18/.../KSKT18_TTHC) co quy tac dien khac:
+        // - KHONG can dien Xa/Phuong
+        // - Dia diem kham -> "Co so kham chua benh" (thay vi "Kham luu dong")
+        // - Hinh thuc chi tra -> "Nguoi su dung lao dong chi tra" (thay vi
+        //   "Ngan sach thanh pho ho tro")
+        var isKSKT18 = window.location.href.indexOf('kskdk_thongtinkhamtren18') !== -1;
+        var hinhThucChiTraLabel = isKSKT18
+            ? 'Ng\u01b0\u1eddi s\u1eed d\u1ee5ng lao \u0111\u1ed9ng chi tr\u1ea3'
+            : 'Ng\u00e2n s\u00e1ch th\u00e0nh ph\u1ed1 h\u1ed7 tr\u1ee3';
+        var diaDiemKhamLabel = isKSKT18
+            ? 'C\u01a1 s\u1edf kh\u00e1m ch\u1eefa b\u1ec7nh'
+            : 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng';
+
+        function step2() {
+            // B2: Hinh thuc chi tra
             setTimeout(function() {
-                selectListRadioByLabel('Ng\u00e2n s\u00e1ch th\u00e0nh ph\u1ed1 h\u1ed7 tr\u1ee3');
-                // B3: Dia diem kham -> "Kham luu dong"
+                selectListRadioByLabel(hinhThucChiTraLabel);
+                // B3: Dia diem kham
                 setTimeout(function() {
-                    selectDxSelectBox('DoiTuongKham', 'Kh\u00e1m l\u01b0u \u0111\u1ed9ng', function() {
+                    selectDxSelectBox('DoiTuongKham', diaDiemKhamLabel, function() {
                         // B4 (neu co truong DoiTuong_M13): chon "Nguoi lao dong phi chinh thuc"
                         setTimeout(function() {
+                            function finishFillTTHC() {
+                                // B5 (neu co truong NgheNghiepId - dropdown "Nghe nghiep",
+                                // rieng trang kskdk_thongtinkham/.../KSKDK_TTHC):
+                                // chon "Lao dong tu do"
+                                setTimeout(function() {
+                                    if (document.querySelector('.NgheNghiepId')) {
+                                        selectDxSelectBox('NgheNghiepId', 'Lao \u0111\u1ed9ng t\u1ef1 do', function() {
+                                            showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                        });
+                                    } else {
+                                        showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                    }
+                                }, 300);
+                            }
                             if (document.querySelector('.DoiTuong_M13')) {
-                                selectDxSelectBox('DoiTuong_M13', 'Ng\u01b0\u1eddi lao \u0111\u1ed9ng phi ch\u00ednh th\u1ee9c', function() {
-                                    showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
-                                });
+                                selectDxSelectBox('DoiTuong_M13', 'Ng\u01b0\u1eddi lao \u0111\u1ed9ng phi ch\u00ednh th\u1ee9c', finishFillTTHC);
                             } else {
-                                showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                finishFillTTHC();
                             }
                         }, 300);
                     });
                 }, 300);
             }, 200);
-        });
+        }
+
+        // B1: Xa/Phuong -> "Xa Bac Tan Uyen" (bo qua tren trang KSKT18_TTHC)
+        if (isKSKT18) {
+            step2();
+        } else {
+            typeAndEnterSelectBox('DiaChiHienTai_XaPhuong', 'X\u00e3 B\u1eafc T\u00e2n Uy\u00ean', step2);
+        }
     }
 
     function fillCommonNumbers() {
@@ -429,6 +469,170 @@
         overlay.querySelector('#_icd_h521').onclick = function() { overlay.remove(); onSelect('H52.1'); };
         overlay.querySelector('#_icd_cancel').onclick = function() { overlay.remove(); };
         overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    }
+
+    // ================================================================
+    //  POPUP TRUNG TAM: KSK Viec lam + Lai xe
+    //  Cho phep chon to hop ket qua kham mat/rang voi 4 lua chon:
+    //  Binh thuong | Co kinh: Can thi | Co kinh: Vien thi | Mat rang.
+    //  Quy tac loai tru: Binh thuong / Can thi / Vien thi la nhom
+    //  "chi chon 1" (giong radio); Mat rang doc lap, chi bi mo khi
+    //  "Binh thuong" duoc chon (vi Binh thuong nghia la khong co bat
+    //  thuong nao ca).
+    // ================================================================
+    function showVLOptionsPopup(onConfirm) {
+        var overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', zIndex: '3000000',
+            background: 'rgba(0,0,0,0.45)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+        });
+        var box = document.createElement('div');
+        Object.assign(box.style, {
+            background: '#fff', borderRadius: '12px',
+            padding: '24px 28px', width: '320px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)', fontFamily: 'sans-serif',
+        });
+        function rowHtml(id, text) {
+            return '<label id="_vlrow_' + id + '" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;transition:opacity .15s;">' +
+                       '<input type="checkbox" id="_vlcb_' + id + '" style="width:18px;height:18px;flex-shrink:0;">' +
+                       '<span style="font-size:14px;font-weight:600;color:#1a1a1a;">' + text + '</span>' +
+                   '</label>';
+        }
+        box.innerHTML =
+            '<div style="font-size:15px;font-weight:700;margin-bottom:16px;color:#1a1a1a">' +
+                '\ud83d\udccb Ch\u1ecdn k\u1ebft qu\u1ea3 kh\u00e1m' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">' +
+                rowHtml('bt', 'B\u00ecnh th\u01b0\u1eddng') +
+                rowHtml('ct', 'C\u00f3 k\u00ednh: C\u1eadn th\u1ecb') +
+                rowHtml('vt', 'C\u00f3 k\u00ednh: Vi\u1ec5n th\u1ecb') +
+                rowHtml('mr', 'M\u1ea5t r\u0103ng') +
+            '</div>' +
+            '<div style="display:flex;gap:10px;">' +
+                '<button id="_vl_ok" style="flex:1;padding:10px 16px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">OK</button>' +
+                '<button id="_vl_cancel" style="flex:1;padding:10px 16px;background:#e0e0e0;color:#333;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Hu\u1ef7</button>' +
+            '</div>';
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        var cbBT = overlay.querySelector('#_vlcb_bt');
+        var cbCT = overlay.querySelector('#_vlcb_ct');
+        var cbVT = overlay.querySelector('#_vlcb_vt');
+        var cbMR = overlay.querySelector('#_vlcb_mr');
+        var rowBT = overlay.querySelector('#_vlrow_bt');
+        var rowCT = overlay.querySelector('#_vlrow_ct');
+        var rowVT = overlay.querySelector('#_vlrow_vt');
+        var rowMR = overlay.querySelector('#_vlrow_mr');
+
+        function setRowEnabled(row, cb, enabled) {
+            cb.disabled = !enabled;
+            row.style.opacity = enabled ? '1' : '0.4';
+            row.style.cursor = enabled ? 'pointer' : 'not-allowed';
+            if (!enabled) cb.checked = false;
+        }
+
+        function updateStates() {
+            if (cbBT.checked) {
+                setRowEnabled(rowCT, cbCT, false);
+                setRowEnabled(rowVT, cbVT, false);
+                setRowEnabled(rowMR, cbMR, false);
+            } else if (cbCT.checked) {
+                setRowEnabled(rowBT, cbBT, false);
+                setRowEnabled(rowVT, cbVT, false);
+                setRowEnabled(rowMR, cbMR, true);
+            } else if (cbVT.checked) {
+                setRowEnabled(rowBT, cbBT, false);
+                setRowEnabled(rowCT, cbCT, false);
+                setRowEnabled(rowMR, cbMR, true);
+            } else {
+                setRowEnabled(rowBT, cbBT, true);
+                setRowEnabled(rowCT, cbCT, true);
+                setRowEnabled(rowVT, cbVT, true);
+                setRowEnabled(rowMR, cbMR, true);
+            }
+        }
+        [cbBT, cbCT, cbVT, cbMR].forEach(function(cb) {
+            cb.addEventListener('change', updateStates);
+        });
+        updateStates();
+
+        overlay.querySelector('#_vl_ok').onclick = function() {
+            var opts = {
+                binhThuong: cbBT.checked,
+                canThi: cbCT.checked,
+                vienThi: cbVT.checked,
+                matRang: cbMR.checked,
+            };
+            if (!opts.binhThuong && !opts.canThi && !opts.vienThi && !opts.matRang) {
+                showToast('\u26a0\ufe0f Vui l\u00f2ng ch\u1ecdn \u00edt nh\u1ea5t 1 m\u1ee5c');
+                return;
+            }
+            overlay.remove();
+            onConfirm(opts);
+        };
+        overlay.querySelector('#_vl_cancel').onclick = function() { overlay.remove(); };
+        overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    }
+
+    function applyVLSelections(opts) {
+        resetAll();
+        setTimeout(function() {
+            var hasEyeIssue = opts.canThi || opts.vienThi;
+
+            // B1: tick "Chua phat hien bat thuong" cho tat ca, tru cac
+            // chuyen khoa co bat thuong duoc chon (Mat / RHM)
+            var cbExceptions = [];
+            if (hasEyeIssue) cbExceptions.push('Mat_ChuaPhatHienBatThuong');
+            if (opts.matRang) cbExceptions.push('RHM_ChuaPhatHienBatThuong');
+            tickAllChuaPhatHien(cbExceptions);
+
+            // B2: chon "Loai I" cho tat ca, tru cac chuyen khoa o tren ->
+            // chon "Loai II"
+            var radioExceptions = [];
+            if (hasEyeIssue) radioExceptions.push('Mat_PhanLoai');
+            if (opts.matRang) radioExceptions.push('RHM_PhanLoai');
+            if (radioExceptions.length > 0) {
+                selectRadioMultiException(radioExceptions, 'Lo\u1ea1i II', 'Lo\u1ea1i I');
+            } else {
+                selectRadioWithException('__none__', 'Lo\u1ea1i I', 'Lo\u1ea1i I');
+            }
+
+            // B3: dien thi luc - co kinh neu can/vien thi, khong kinh neu binh thuong
+            if (hasEyeIssue) {
+                setNumberField('Mat_CoKinh_MP', '10');
+                setNumberField('Mat_CoKinh_MT', '10');
+            } else {
+                setNumberField('Mat_KhongKinh_MP', '10');
+                setNumberField('Mat_KhongKinh_MT', '10');
+            }
+            fillCommonNumbers();
+
+            // B4: dien ICD tuong ung va thong bao
+            // Luu y: fillTagBox tim item trong dropdown bang selector toan
+            // trang (khong gioi han theo field), nen 2 lenh fillTagBox goi
+            // dong thoi (cung delay) se cuop focus/dropdown cua nhau. Phai
+            // giai cach cac lenh de chay tuan tu.
+            var parts = [];
+            var icdDelay = 300;
+            if (opts.binhThuong) parts.push('B\u00ecnh th\u01b0\u1eddng');
+            if (opts.canThi) {
+                setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', 'H52.1'); }, icdDelay);
+                parts.push('C\u1eadn th\u1ecb (H52.1)');
+                icdDelay += 1500;
+            }
+            if (opts.vienThi) {
+                setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', 'H52.0'); }, icdDelay);
+                parts.push('Vi\u1ec5n th\u1ecb (H52.0)');
+                icdDelay += 1500;
+            }
+            if (opts.matRang) {
+                setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, icdDelay);
+                parts.push('M\u1ea5t r\u0103ng (K08.1)');
+                icdDelay += 1500;
+            }
+            showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n: ' + parts.join(' + '));
+        }, 400);
     }
 
     function selectNCTRadio(code, optLabel) {
@@ -748,8 +952,8 @@
             fn: function() {
                 // Dong bo logic voi "Thong tin kham NCT binh thuong (M14)":
                 // resetAll -> tick toan bo "Chua phat hien bat thuong" -> chon
-                // "Loai I" toan bo -> dien thi luc khong kinh 10/10 -> dien
-                // so TMH mac dinh.
+                // "Loai I" toan bo -> dien so TMH mac dinh. Khong tu dien thi
+                // luc (Mat_KhongKinh) nua de giong M14.
                 resetAll();
                 setTimeout(function() {
                     tickAllChuaPhatHien([]);
@@ -1399,155 +1603,54 @@
             emoji: '\ud83d\udcc1', label: 'KSK Vi\u1ec7c l\u00e0m + L\u00e1i xe',
             tier: 'pro',
             color: '#2e7d32', hoverColor: '#1b5e20',
-            hasFlyout: true,
             noAgeLogic: true,
             check: function() {
                 // Chi kha dung tren trang "KSK Viec lam + Lai xe"
                 // (nav_group/kskdk_thongtinkhamtren18/...), khong hien o cac
                 // trang khac (M13, NCT, ...) du co cac truong PhanLoai trung ten.
                 if (window.location.href.indexOf('kskdk_thongtinkhamtren18') === -1) return false;
-                return !!document.querySelector('.NoiKhoa_PhanLoai') ||
+                return !!document.querySelector('.TuanHoan_PhanLoai') ||
                        !!document.querySelector('.Mat_PhanLoai') ||
                        !!document.querySelector('.RHM_PhanLoai');
             },
-            flyoutItems: [
-                    {
-                        emoji: '\ud83c\udfe5', label: 'T\u00edch "Ch\u01b0a b\u1ea5t th\u01b0\u1eddng" + Lo\u1ea1i I',
-                        color: '#2e7d32', hoverColor: '#1b5e20',
-                        // Kha dung khi co radio "Loai I" VA co chu "Chua phat hien bat thuong"
-                        check: function() {
-                            var hasLoaiI = false;
-                            document.querySelectorAll('.dx-item.dx-list-item[role="option"]').forEach(function(item) {
-                                if (hasLoaiI) return;
-                                var lbl = item.querySelector('.dx-item-content.dx-list-item-content');
-                                if (lbl && lbl.textContent.trim() === 'Lo\u1ea1i I') hasLoaiI = true;
-                            });
-                            var hasCBT = false;
-                            document.querySelectorAll('b').forEach(function(b) {
-                                if (b.textContent.includes('Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng')) hasCBT = true;
-                            });
-                            return hasLoaiI && hasCBT;
-                        },
-                        fn: function() {
-                            resetAll();
-                            setTimeout(function() {
-                                tickAllChuaPhatHien([]);
-                                selectRadioWithException('__none__', 'Lo\u1ea1i I', 'Lo\u1ea1i I');
-                                setNumberField('Mat_KhongKinh_MP', '10');
-                                setNumberField('Mat_KhongKinh_MT', '10');
-                                fillCommonNumbers();
-                                showToast('\ud83c\udfe5 \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I + Kh\u00f4ng k\u00ednh + Th\u00ednh l\u1ef1c');
-                            }, 400);
-                        }
-                    },
-                    {
-                        emoji: '\u2764\ufe0f', label: 'B\u1ec7nh n\u1ec1n THA+\u0110T\u0110+BTTMCB',
-                        color: '#c62828', hoverColor: '#8e0000',
-                        // Kha dung khi co truong NoiKhoa_PhanLoai va NoiKhoa_ChanDoanXacDinh_ICD
-                        check: function() {
-                            return !!document.querySelector('.NoiKhoa_PhanLoai') &&
-                                   !!document.querySelector('.NoiKhoa_ChanDoanXacDinh_ICD');
-                        },
-                        fn: function() {
-                            // Buoc 1: thuc hien giong "Tich chua bat thuong + Loai I"
-                            resetAll();
-                            setTimeout(function() {
-                                tickAllChuaPhatHien([]);
-                                setNumberField('Mat_KhongKinh_MP', '10');
-                                setNumberField('Mat_KhongKinh_MT', '10');
-                                fillCommonNumbers();
-
-                                // Buoc 2: rieng NoiKhoa -> bo tick "Chua phat hien bat thuong", chon Loai II
-                                var noiKhoaCb = document.querySelector('.NoiKhoa_ChuaPhatHienBatThuong dx-check-box[role="checkbox"]');
-                                if (noiKhoaCb) untickCheckbox(noiKhoaCb);
-
-                                // Chon Loai I cho tat ca ngoai NoiKhoa, chon Loai II cho NoiKhoa
-                                selectRadioWithException('NoiKhoa_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-
-                                // Buoc 3: dien 3 ma ICD vao NoiKhoa_ChanDoanXacDinh_ICD lan luot
-                                var icdCodes = ['I10', 'I25.5', 'E11.9'];
-                                var icdDelay = 1500;
-                                icdCodes.forEach(function(code, idx) {
-                                    setTimeout(function() {
-                                        fillTagBox('NoiKhoa_ChanDoanXacDinh_ICD', code);
-                                    }, icdDelay * (idx + 1));
-                                });
-
-                                showToast('\u2764\ufe0f THA+\u0110T\u0110+BTTMCB: \u0111ang \u0111i\u1ec1n ICD...');
-                            }, 400);
-                        }
-                    },
-                    {
-                        emoji: '\ud83d\udc53', label: 'C\u00f3 k\u00ednh + ICD H52',
-                        color: '#6a1b9a', hoverColor: '#4a148c',
-                        // Kha dung khi co truong phan loai mat va truong co kinh
-                        check: function() {
-                            return !!document.querySelector('.Mat_PhanLoai') &&
-                                   !!document.querySelector('.Mat_CoKinh_MP');
-                        },
-                        fn: function() {
-                            resetAll();
-                            setTimeout(function() {
-                                tickAllChuaPhatHien(['Mat_ChuaPhatHienBatThuong']);
-                                selectRadioWithException('Mat_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-                                setNumberField('Mat_CoKinh_MP', '10');
-                                setNumberField('Mat_CoKinh_MT', '10');
-                                fillCommonNumbers();
-                                showICDPopup(function(icdCode) {
-                                    setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', icdCode); }, 300);
-                                    showToast('\ud83d\udc53 Lo\u1ea1i II (M\u1eaft) + C\u00f3 k\u00ednh + ICD: ' + icdCode);
-                                });
-                            }, 400);
-                        }
-                    },
-                    {
-                        emoji: '\ud83e\uddb7', label: 'RHM: Lo\u1ea1i II + K08.1',
-                        color: '#bf360c', hoverColor: '#8d1a00',
-                        // Kha dung khi co truong RHM_PhanLoai va tag box ICD cua RHM
-                        check: function() {
-                            return !!document.querySelector('.RHM_PhanLoai') &&
-                                   !!document.querySelector('.RHM_ChanDoanXacDinh_ICD');
-                        },
-                        fn: function() {
-                            resetAll();
-                            setTimeout(function() {
-                                tickAllChuaPhatHien(['RHM_ChuaPhatHienBatThuong']);
-                                selectRadioWithException('RHM_PhanLoai', 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-                                setNumberField('Mat_KhongKinh_MP', '10');
-                                setNumberField('Mat_KhongKinh_MT', '10');
-                                fillCommonNumbers();
-                                setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, 300);
-                                showToast('\ud83e\uddb7 Lo\u1ea1i II (RHM) + K08.1 + Kh\u00f4ng k\u00ednh + Th\u00ednh l\u1ef1c');
-                            }, 400);
-                        }
-                    },
-                    {
-                        emoji: '\ud83d\udc53\ud83e\uddb7', label: 'C\u00f3 k\u00ednh + RHM: Lo\u1ea1i II + ICD',
-                        color: '#00695c', hoverColor: '#004d40',
-                        // Kha dung khi co ca phan loai mat + co kinh + phan loai RHM
-                        check: function() {
-                            return !!document.querySelector('.Mat_PhanLoai') &&
-                                   !!document.querySelector('.Mat_CoKinh_MP') &&
-                                   !!document.querySelector('.RHM_PhanLoai');
-                        },
-                        fn: function() {
-                            resetAll();
-                            setTimeout(function() {
-                                tickAllChuaPhatHien(['Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong']);
-                                selectRadioMultiException(['Mat_PhanLoai', 'RHM_PhanLoai'], 'Lo\u1ea1i II', 'Lo\u1ea1i I');
-                                setNumberField('Mat_CoKinh_MP', '10');
-                                setNumberField('Mat_CoKinh_MT', '10');
-                                fillCommonNumbers();
-                                setTimeout(function() { fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1'); }, 300);
-                                showICDPopup(function(icdCode) {
-                                    setTimeout(function() { fillTagBox('Mat_ChanDoanXacDinh_ICD', icdCode); }, 300);
-                                    showToast('\ud83d\udc53\ud83e\uddb7 Lo\u1ea1i II (M\u1eaft+RHM) + C\u00f3 k\u00ednh + K08.1 + ICD: ' + icdCode);
-                                });
-                            }, 400);
-                        }
-                    }
-            ],
-            fn: function() { /* handled by flyout */ }
+            fn: function() {
+                showVLOptionsPopup(applyVLSelections);
+            }
+        },
+        {
+            emoji: '\ud83d\udc66', label: 'Kh\u00e1m l\u00e2m s\u00e0ng 6-18 tu\u1ed5i kh\u00f4ng \u0111i h\u1ecdc (M12)',
+            tier: 'lite',
+            color: '#e65100', hoverColor: '#bf360c',
+            // Kha dung tren trang KSKD18_ThongTinKham (M12)
+            check: function() {
+                return window.location.href.indexOf('KSKD18_ThongTinKham') !== -1;
+            },
+            fn: function() {
+                // Xoa ICD truoc, sau do tick "Chua phat hien bat thuong" + dien TMH mac dinh
+                var icdClasses = [
+                    'TuanHoan_ChanDoanSoBo_ICD', 'TuanHoan_ChanDoanXacDinh_ICD',
+                    'HoHap_ChanDoanSoBo_ICD',    'HoHap_ChanDoanXacDinh_ICD',
+                    'TieuHoa_ChanDoanSoBo_ICD',  'TieuHoa_ChanDoanXacDinh_ICD',
+                    'ThanTietNieu_ChanDoanSoBo_ICD', 'ThanTietNieu_ChanDoanXacDinh_ICD',
+                    'NoiTiet_ChanDoanSoBo_ICD',  'NoiTiet_ChanDoanXacDinh_ICD',
+                    'TamThan_ChanDoanSoBo_ICD',  'TamThan_ChanDoanXacDinh_ICD',
+                    'Mat_ChanDoanSoBo_ICD',      'Mat_ChanDoanXacDinh_ICD',
+                    'TMH_ChanDoanSoBo_ICD',      'TMH_ChanDoanXacDinh_ICD',
+                    'RHM_ChanDoanSoBo_ICD',      'RHM_ChanDoanXacDinh_ICD'
+                ];
+                icdClasses.forEach(function(cls) { clearTagBox(cls); });
+                setTimeout(function() {
+                    document.querySelectorAll('b').forEach(function(bEl) {
+                        if (!bEl.textContent.includes('Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng')) return;
+                        var cb = findCheckboxNear(bEl);
+                        if (cb) tickCheckbox(cb);
+                    });
+                    setNumberField('Mat_KhongKinh_MP', '10');
+                    setNumberField('Mat_KhongKinh_MT', '10');
+                    fillCommonNumbers();
+                    showToast('\u2705 \u0110\u00e3 t\u00edch Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng to\u00e0n b\u1ed9 (M12)');
+                }, 300);
+            }
         },
                 {
             emoji: '\ud83d\udd04', label: 'C\u1eadp nh\u1eadt phi\u00ean b\u1ea3n',
@@ -1570,7 +1673,7 @@
                 // Lay phien ban hien tai TU CHINH GM_info (Tampermonkey tu dong bom
                 // san, luon khop voi @version trong header) - khong hardcode chuoi
                 // rieng nua de tranh bi le voi header nhu truoc day.
-                var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.24.7';
+                var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.29';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -2954,26 +3057,12 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
-    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong"
-    //  (Ap dung cho: NCT binh thuong/benh ly (M14), Kham >18 tuoi (M13),
-    //   KSK Viec lam + Lai xe)
-    //  - Chon Loai I        => tick "Chua phat hien" + xoa Chan doan so bo/
-    //                           xac dinh (ICD)
-    //  - Tick "Chua phat hien" => chon Loai I + xoa Chan doan so bo/xac dinh
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M14)
+    //  - Chon Loai I  => tick "Chua phat hien" + xoa ICD
+    //  - Tick "Chua phat hien" => chon Loai I + xoa ICD
     //  - Bo tick "Chua phat hien" => bo chon Loai I (tat ca radio)
-    //  - Chon Loai II/III/IV/V => chi bo tick "Chua phat hien", KHONG xoa
-    //                              Chan doan so bo/xac dinh da nhap (du
-    //                              doi qua lai giua II/III/IV/V). Chi xoa
-    //                              khi nguoi dung chon LAI "Loai I".
+    //  - Chon Loai II..V => bo tick "Chua phat hien" + xoa ICD
     // ================================================================
-    var M14_SYNC_URL_PATTERNS = ['KNCT_ThongTinKham', 'KSKDK_ThongTinKham', 'kskdk_thongtinkhamtren18'];
-    function isM14SyncPage() {
-        var href = window.location.href;
-        for (var i = 0; i < M14_SYNC_URL_PATTERNS.length; i++) {
-            if (href.indexOf(M14_SYNC_URL_PATTERNS[i]) !== -1) return true;
-        }
-        return false;
-    }
     var M14_SPECIALTIES = [
         { radio: 'NoiKhoa_PhanLoai',  cb: 'NoiKhoa_ChuaPhatHienBatThuong',  icds: ['NoiKhoa_ChanDoanSoBo_ICD',  'NoiKhoa_ChanDoanXacDinh_ICD']  },
         { radio: 'NgoaiKhoa_PhanLoai', cb: 'NgoaiKhoa_ChuaPhatHienBatThuong', icds: ['NgoaiKhoa_ChanDoanSoBo_ICD', 'NgoaiKhoa_ChanDoanXacDinh_ICD'] },
@@ -3020,11 +3109,8 @@
                 spec.icds.forEach(function(cls) { clearTagBox(cls); });
                 if (cb && cb.getAttribute('aria-checked') !== 'true') tickCheckbox(cb);
             } else {
-                // Loai II/III/IV/V: chi bo tick "Chua phat hien bat thuong".
-                // KHONG xoa Chan doan so bo / xac dinh (ICD) da nhap, du
-                // doi qua lai giua cac Loai II/III/IV/V. Chi xoa khi chon
-                // LAI "Loai I" (nhanh tren).
                 if (cb && cb.getAttribute('aria-checked') === 'true') untickCheckbox(cb);
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
             }
         } finally {
             setTimeout(function() { _m14SyncGuard = false; }, 50);
@@ -3054,17 +3140,12 @@
     }
 
     function setupM14Sync() {
-        if (!isM14SyncPage()) return;
+        if (window.location.href.indexOf('KNCT_ThongTinKham') === -1) return;
 
         M14_SPECIALTIES.forEach(function(spec) {
             var radioContainer = document.querySelector('.' + spec.radio);
             var cbContainer = document.querySelector('.' + spec.cb);
             if (!radioContainer || !cbContainer) return;
-            // Tranh gan trung listener khi setupM14Sync duoc goi lai nhieu lan
-            // (vi du khi dieu huong qua lai giua cac trang M13/M14/KSKLX)
-            if (radioContainer.__m14SyncBound) return;
-            radioContainer.__m14SyncBound = true;
-            cbContainer.__m14SyncBound = true;
 
             radioContainer.addEventListener('click', function(e) {
                 var item = e.target.closest('.dx-item.dx-list-item[role="option"]');
@@ -3086,15 +3167,212 @@
         });
     }
 
+    var _m14SyncSetup = false;
     var m14SyncObserver = new MutationObserver(function() {
-        if (!isM14SyncPage()) return;
-        var hasAnyPhanLoai = document.querySelector('.NoiKhoa_PhanLoai') ||
-                              document.querySelector('.Mat_PhanLoai') ||
-                              document.querySelector('.RHM_PhanLoai');
-        if (!hasAnyPhanLoai) return;
+        if (_m14SyncSetup) return;
+        if (window.location.href.indexOf('KNCT_ThongTinKham') === -1) return;
+        if (!document.querySelector('.NoiKhoa_PhanLoai')) return;
+        _m14SyncSetup = true;
+        m14SyncObserver.disconnect();
         setupM14Sync();
     });
     m14SyncObserver.observe(document.body, { childList: true, subtree: true });
+
+    // ================================================================
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M13)
+    //  Giong het co che M14 nhung danh cho trang KSKDK_ThongTinKham
+    //  va cac chuyen khoa tuong ung cua phieu nguoi >18 tuoi.
+    // ================================================================
+    var M13_SPECIALTIES = [
+        { radio: 'NoiKhoa_PhanLoai',     cb: 'NoiKhoa_ChuaPhatHienBatThuong',     icds: ['NoiKhoa_ChanDoanSoBo_ICD',     'NoiKhoa_ChanDoanXacDinh_ICD']     },
+        { radio: 'HoHap_PhanLoai',       cb: 'HoHap_ChuaPhatHienBatThuong',       icds: ['HoHap_ChanDoanSoBo_ICD',       'HoHap_ChanDoanXacDinh_ICD']       },
+        { radio: 'TieuHoa_PhanLoai',     cb: 'TieuHoa_ChuaPhatHienBatThuong',     icds: ['TieuHoa_ChanDoanSoBo_ICD',     'TieuHoa_ChanDoanXacDinh_ICD']     },
+        { radio: 'ThanTietNieu_PhanLoai',cb: 'ThanTietNieu_ChuaPhatHienBatThuong',icds: ['ThanTietNieu_ChanDoanSoBo_ICD','ThanTietNieu_ChanDoanXacDinh_ICD'] },
+        { radio: 'NoiTiet_PhanLoai',     cb: 'NoiTiet_ChuaPhatHienBatThuong',     icds: ['NoiTiet_ChanDoanSoBo_ICD',     'NoiTiet_ChanDoanXacDinh_ICD']     },
+        { radio: 'TamThan_PhanLoai',     cb: 'TamThan_ChuaPhatHienBatThuong',     icds: ['TamThan_ChanDoanSoBo_ICD',     'TamThan_ChanDoanXacDinh_ICD']     },
+        { radio: 'CoXuongKhop_PhanLoai', cb: 'CoXuongKhop_ChuaPhatHienBatThuong', icds: ['CoXuongKhop_ChanDoanSoBo_ICD', 'CoXuongKhop_ChanDoanXacDinh_ICD'] },
+        { radio: 'ThanKinh_PhanLoai',    cb: 'ThanKinh_ChuaPhatHienBatThuong',    icds: ['ThanKinh_ChanDoanSoBo_ICD',    'ThanKinh_ChanDoanXacDinh_ICD']    },
+        { radio: 'NgoaiKhoa_PhanLoai',   cb: 'NgoaiKhoa_ChuaPhatHienBatThuong',   icds: ['NgoaiKhoa_ChanDoanSoBo_ICD',   'NgoaiKhoa_ChanDoanXacDinh_ICD']   },
+        { radio: 'DaLieu_PhanLoai',      cb: 'DaLieu_ChuaPhatHienBatThuong',      icds: ['DaLieu_ChanDoanSoBo_ICD',      'DaLieu_ChanDoanXacDinh_ICD']      },
+        { radio: 'SanKhoa_PhanLoai',     cb: 'SanKhoa_ChuaPhatHienBatThuong',     icds: ['SanKhoa_ChanDoanSoBo_ICD',     'SanKhoa_ChanDoanXacDinh_ICD']     },
+        { radio: 'PhuKhoa_PhanLoai',     cb: 'PhuKhoa_ChuaPhatHienBatThuong',     icds: ['PhuKhoa_ChanDoanSoBo_ICD',     'PhuKhoa_ChanDoanXacDinh_ICD']     },
+        { radio: 'Mat_PhanLoai',         cb: 'Mat_ChuaPhatHienBatThuong',         icds: ['Mat_ChanDoanSoBo_ICD',         'Mat_ChanDoanXacDinh_ICD']         },
+        { radio: 'TMH_PhanLoai',         cb: 'TMH_ChuaPhatHienBatThuong',         icds: ['TMH_ChanDoanSoBo_ICD',         'TMH_ChanDoanXacDinh_ICD']         },
+        { radio: 'RHM_PhanLoai',         cb: 'RHM_ChuaPhatHienBatThuong',         icds: ['RHM_ChanDoanSoBo_ICD',         'RHM_ChanDoanXacDinh_ICD']         },
+    ];
+
+    var _m13SyncGuard = false;
+
+    function m13GetSelectedLabel(radioContainerCls) {
+        var container = document.querySelector('.' + radioContainerCls);
+        if (!container) return null;
+        var selected = container.querySelector('.dx-list-item-selected .dx-item-content.dx-list-item-content');
+        return selected ? (selected.textContent || '').trim() : null;
+    }
+
+    function m13SelectLoaiI(radioContainerCls) {
+        var container = document.querySelector('.' + radioContainerCls);
+        if (!container) return;
+        var items = container.querySelectorAll('.dx-item.dx-list-item[role="option"]');
+        for (var i = 0; i < items.length; i++) {
+            var lbl = items[i].querySelector('.dx-item-content.dx-list-item-content');
+            if (lbl && (lbl.textContent || '').trim() === 'Lo\u1ea1i I') {
+                if (!items[i].classList.contains('dx-list-item-selected')) {
+                    pointerClick(items[i]);
+                    var icon = items[i].querySelector('.dx-radiobutton-icon');
+                    if (icon) pointerClick(icon);
+                }
+                break;
+            }
+        }
+    }
+
+    function m13SyncFromRadio(spec, selectedLabel) {
+        if (_m13SyncGuard) return;
+        _m13SyncGuard = true;
+        try {
+            var cb = document.querySelector('.' + spec.cb + ' dx-check-box[role="checkbox"]');
+            if (selectedLabel === 'Lo\u1ea1i I') {
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
+                if (cb && cb.getAttribute('aria-checked') !== 'true') tickCheckbox(cb);
+            } else {
+                if (cb && cb.getAttribute('aria-checked') === 'true') untickCheckbox(cb);
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
+            }
+        } finally {
+            setTimeout(function() { _m13SyncGuard = false; }, 50);
+        }
+    }
+
+    function m13SyncFromCheckbox(spec, checked) {
+        if (_m13SyncGuard) return;
+        _m13SyncGuard = true;
+        try {
+            if (checked) {
+                spec.icds.forEach(function(cls) { clearTagBox(cls); });
+                m13SelectLoaiI(spec.radio);
+            } else {
+                var current = m13GetSelectedLabel(spec.radio);
+                if (current === 'Lo\u1ea1i I') {
+                    var container = document.querySelector('.' + spec.radio);
+                    if (container) {
+                        var sel = container.querySelector('.dx-list-item-selected');
+                        if (sel) pointerClick(sel);
+                    }
+                }
+            }
+        } finally {
+            setTimeout(function() { _m13SyncGuard = false; }, 50);
+        }
+    }
+
+    function setupM13Sync() {
+        if (window.location.href.indexOf('KSKDK_ThongTinKham') === -1) return;
+
+        M13_SPECIALTIES.forEach(function(spec) {
+            var radioContainer = document.querySelector('.' + spec.radio);
+            var cbContainer = document.querySelector('.' + spec.cb);
+            if (!radioContainer || !cbContainer) return;
+
+            radioContainer.addEventListener('click', function(e) {
+                var item = e.target.closest('.dx-item.dx-list-item[role="option"]');
+                if (!item) return;
+                setTimeout(function() {
+                    var lbl = m13GetSelectedLabel(spec.radio);
+                    if (lbl) m13SyncFromRadio(spec, lbl);
+                }, 80);
+            }, true);
+
+            cbContainer.addEventListener('click', function() {
+                setTimeout(function() {
+                    var cb = cbContainer.querySelector('dx-check-box[role="checkbox"]');
+                    if (!cb) return;
+                    var isChecked = cb.getAttribute('aria-checked') === 'true';
+                    m13SyncFromCheckbox(spec, isChecked);
+                }, 80);
+            }, true);
+        });
+    }
+
+    var _m13SyncSetup = false;
+    var m13SyncObserver = new MutationObserver(function() {
+        if (_m13SyncSetup) return;
+        if (window.location.href.indexOf('KSKDK_ThongTinKham') === -1) return;
+        if (!document.querySelector('.NoiKhoa_PhanLoai')) return;
+        _m13SyncSetup = true;
+        m13SyncObserver.disconnect();
+        setupM13Sync();
+    });
+    m13SyncObserver.observe(document.body, { childList: true, subtree: true });
+
+    // ================================================================
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong"
+    //  KSK Viec lam + Lai xe (kskdk_thongtinkhamtren18 - KSKT18_ThongTinKham)
+    //  Cau truc chuyen khoa khac M13: muc "Noi khoa" duoc tach rieng thanh
+    //  7 nhom nho (Tuan hoan, Ho hap, Tieu hoa, Than-Tiet nieu, Noi tiet,
+    //  Co-xuong-khop, Than kinh) thay vi 1 nhom "Noi khoa" gop chung, nen
+    //  KHONG the tai su dung nguyen M13_SPECIALTIES (thieu "Tuan hoan" va
+    //  co du "Noi khoa" khong ton tai tren trang nay).
+    //  Dung chung cac ham xu ly chung voi M13 (m13GetSelectedLabel,
+    //  m13SyncFromRadio, m13SyncFromCheckbox) vi logic giong hoan toan M14.
+    // ================================================================
+    var VL_SPECIALTIES = [
+        { radio: 'TuanHoan_PhanLoai',     cb: 'TuanHoan_ChuaPhatHienBatThuong',     icds: ['TuanHoan_ChanDoanSoBo_ICD',     'TuanHoan_ChanDoanXacDinh_ICD']     },
+        { radio: 'HoHap_PhanLoai',        cb: 'HoHap_ChuaPhatHienBatThuong',        icds: ['HoHap_ChanDoanSoBo_ICD',        'HoHap_ChanDoanXacDinh_ICD']        },
+        { radio: 'TieuHoa_PhanLoai',      cb: 'TieuHoa_ChuaPhatHienBatThuong',      icds: ['TieuHoa_ChanDoanSoBo_ICD',      'TieuHoa_ChanDoanXacDinh_ICD']      },
+        { radio: 'ThanTietNieu_PhanLoai', cb: 'ThanTietNieu_ChuaPhatHienBatThuong', icds: ['ThanTietNieu_ChanDoanSoBo_ICD', 'ThanTietNieu_ChanDoanXacDinh_ICD'] },
+        { radio: 'NoiTiet_PhanLoai',      cb: 'NoiTiet_ChuaPhatHienBatThuong',      icds: ['NoiTiet_ChanDoanSoBo_ICD',      'NoiTiet_ChanDoanXacDinh_ICD']      },
+        { radio: 'CoXuongKhop_PhanLoai',  cb: 'CoXuongKhop_ChuaPhatHienBatThuong',  icds: ['CoXuongKhop_ChanDoanSoBo_ICD',  'CoXuongKhop_ChanDoanXacDinh_ICD']  },
+        { radio: 'ThanKinh_PhanLoai',     cb: 'ThanKinh_ChuaPhatHienBatThuong',     icds: ['ThanKinh_ChanDoanSoBo_ICD',     'ThanKinh_ChanDoanXacDinh_ICD']     },
+        { radio: 'TamThan_PhanLoai',      cb: 'TamThan_ChuaPhatHienBatThuong',      icds: ['TamThan_ChanDoanSoBo_ICD',      'TamThan_ChanDoanXacDinh_ICD']      },
+        { radio: 'NgoaiKhoa_PhanLoai',    cb: 'NgoaiKhoa_ChuaPhatHienBatThuong',    icds: ['NgoaiKhoa_ChanDoanSoBo_ICD',    'NgoaiKhoa_ChanDoanXacDinh_ICD']    },
+        { radio: 'DaLieu_PhanLoai',       cb: 'DaLieu_ChuaPhatHienBatThuong',       icds: ['DaLieu_ChanDoanSoBo_ICD',       'DaLieu_ChanDoanXacDinh_ICD']       },
+        { radio: 'SanKhoa_PhanLoai',      cb: 'SanKhoa_ChuaPhatHienBatThuong',      icds: ['SanKhoa_ChanDoanSoBo_ICD',      'SanKhoa_ChanDoanXacDinh_ICD']      },
+        { radio: 'PhuKhoa_PhanLoai',      cb: 'PhuKhoa_ChuaPhatHienBatThuong',      icds: ['PhuKhoa_ChanDoanSoBo_ICD',      'PhuKhoa_ChanDoanXacDinh_ICD']      },
+        { radio: 'Mat_PhanLoai',          cb: 'Mat_ChuaPhatHienBatThuong',          icds: ['Mat_ChanDoanSoBo_ICD',          'Mat_ChanDoanXacDinh_ICD']          },
+        { radio: 'TMH_PhanLoai',          cb: 'TMH_ChuaPhatHienBatThuong',          icds: ['TMH_ChanDoanSoBo_ICD',          'TMH_ChanDoanXacDinh_ICD']          },
+        { radio: 'RHM_PhanLoai',          cb: 'RHM_ChuaPhatHienBatThuong',          icds: ['RHM_ChanDoanSoBo_ICD',          'RHM_ChanDoanXacDinh_ICD']          },
+    ];
+
+    function setupVLSync() {
+        VL_SPECIALTIES.forEach(function(spec) {
+            var radioContainer = document.querySelector('.' + spec.radio);
+            var cbContainer    = document.querySelector('.' + spec.cb);
+            if (!radioContainer || !cbContainer) return;
+
+            radioContainer.addEventListener('click', function(e) {
+                var item = e.target.closest('.dx-item.dx-list-item[role="option"]');
+                if (!item) return;
+                setTimeout(function() {
+                    var lbl = m13GetSelectedLabel(spec.radio);
+                    if (lbl) m13SyncFromRadio(spec, lbl);
+                }, 80);
+            }, true);
+
+            cbContainer.addEventListener('click', function() {
+                setTimeout(function() {
+                    var cb = cbContainer.querySelector('dx-check-box[role="checkbox"]');
+                    if (!cb) return;
+                    var isChecked = cb.getAttribute('aria-checked') === 'true';
+                    m13SyncFromCheckbox(spec, isChecked);
+                }, 80);
+            }, true);
+        });
+    }
+
+    var _vl_SyncSetup = false;
+    var vlSyncObserver = new MutationObserver(function() {
+        if (_vl_SyncSetup) return;
+        if (window.location.href.indexOf('kskdk_thongtinkhamtren18') === -1) return;
+        // "Tuan hoan" la muc dau cua phieu nay, chi ton tai tren trang
+        // KSKT18 (khong dung ".NoiKhoa_PhanLoai" vi truong nay khong co
+        // tren trang nay, khien guard cu khong bao gio kich hoat duoc).
+        if (!document.querySelector('.TuanHoan_PhanLoai')) return;
+        _vl_SyncSetup = true;
+        vlSyncObserver.disconnect();
+        setupVLSync();
+    });
+    vlSyncObserver.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
     //  PHIM TAT: Shift + A => an / hien nut "Thao tac nhanh"
@@ -3673,7 +3951,7 @@
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js';
         // Lay phien ban hien tai TU CHINH GM_info, khong hardcode (xem giai
         // thich o khoi "Kiem tra cap nhat" thu cong phia tren).
-        var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.24.7';
+        var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.29';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
