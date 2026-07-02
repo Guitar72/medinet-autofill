@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      6.29
+// @version      7.2
 // @description  Nut Thao Tac Nhanh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -1673,7 +1673,7 @@
                 // Lay phien ban hien tai TU CHINH GM_info (Tampermonkey tu dong bom
                 // san, luon khop voi @version trong header) - khong hardcode chuoi
                 // rieng nua de tranh bi le voi header nhu truoc day.
-                var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.29';
+                var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '7.2';
                 var AUTO_UPDATE_KEY = '_mtt_auto_update';
 
                 // ---- helpers ----
@@ -3951,7 +3951,7 @@
         var RAW_URL  = 'https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js';
         // Lay phien ban hien tai TU CHINH GM_info, khong hardcode (xem giai
         // thich o khoi "Kiem tra cap nhat" thu cong phia tren).
-        var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.29';
+        var CURRENT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '7.2';
 
         try {
             if (localStorage.getItem(AUTO_UPDATE_KEY) !== '1') return;
@@ -5158,6 +5158,116 @@
             return waitForDetailFormLoaded().catch(function() {
                 throw { error: true, reason: 'Không tải được form chi tiết bệnh nhân (timeout)' };
             });
+        }).then(function() {
+            return checkPauseOrStop();
+        }).then(function() {
+            // 4.5. Kiem tra & chon "Doi tuong *" (DoiTuong_M13):
+            //   - Input co readonly="" => phai mo dropdown roi click item.
+            //   - Khi trang vua render xong, du lieu dropdown co the chua load =>
+            //     thu lai toi da MAX_ATTEMPTS lan: moi lan mo lai dropdown, doi items
+            //     thuc su co du lieu (khong phai "Khong co du lieu"), roi chon.
+            //   - Sau khi click item, XAC NHAN input da co gia tri moi chop thay doi =>
+            //     neu chua co, thu lai.
+            //   - Neu het so lan thu ma van khong chon duoc => throw loi, KHONG bo qua.
+            var doiTuongField = document.querySelector('.DoiTuong_M13');
+            if (!doiTuongField) return Promise.resolve(); // trang nay khong co truong nay -> bo qua
+
+            var dtInput = doiTuongField.querySelector('dx-select-box input.dx-texteditor-input');
+            var dtValue = dtInput ? (dtInput.value || '').trim() : '';
+            if (dtValue) return Promise.resolve(); // da co gia tri -> khong can lam gi
+
+            // Chua chon -> phai chon truoc khi upload anh
+            var TARGET = 'Ng\u01b0\u1eddi lao \u0111\u1ed9ng phi ch\u00ednh th\u1ee9c';
+            var targetNorm = TARGET.toLowerCase();
+            var MAX_ATTEMPTS = 5;          // so lan thu mo dropdown
+            var ITEM_WAIT_MS = 3000;       // cho items xuat hien toi da 3s moi lan
+            var ITEM_POLL_MS = 200;        // kiem tra moi 200ms
+            var CONFIRM_WAIT_MS = 1000;    // sau khi click item, cho toi da 1s xac nhan
+
+            function closeDropdown() {
+                // Nhan Escape de dong popup neu dang mo
+                document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape', keyCode: 27 }));
+            }
+
+            function openDropdown() {
+                var selectBox = doiTuongField.querySelector('dx-select-box');
+                var dropBtn = selectBox && (
+                    selectBox.querySelector('.dx-dropdowneditor-button') ||
+                    selectBox.querySelector('.dx-dropdowneditor-icon')
+                );
+                fireClick(dropBtn || selectBox || doiTuongField);
+            }
+
+            // Tim item khop trong cac overlay dang hien, BOI QUA item "Khong co du lieu"
+            function findTargetItem() {
+                var found = null;
+                var selectors = [
+                    '.dx-dropdowneditor-overlay .dx-list-item[role="option"]:not(.dx-state-invisible)',
+                    '.dx-popup-wrapper .dx-list-item[role="option"]:not(.dx-state-invisible)'
+                ];
+                document.querySelectorAll(selectors.join(',')).forEach(function(item) {
+                    if (found) return;
+                    var txt = (item.textContent || '').trim();
+                    // Bo qua item thong bao "khong co du lieu"
+                    if (txt === '' || txt.toLowerCase().indexOf('kh\u00f4ng c\u00f3') !== -1) return;
+                    if (txt.toLowerCase().indexOf(targetNorm) !== -1) found = item;
+                });
+                return found;
+            }
+
+            // Xac nhan input da duoc cap nhat (co gia tri khac rong)
+            function confirmSelected() {
+                return new Promise(function(resolve) {
+                    var elapsed = 0;
+                    function poll() {
+                        var inp = doiTuongField.querySelector('dx-select-box input.dx-texteditor-input');
+                        var val = inp ? (inp.value || '').trim() : '';
+                        if (val) { resolve(true); return; }
+                        elapsed += 100;
+                        if (elapsed >= CONFIRM_WAIT_MS) { resolve(false); return; }
+                        setTimeout(poll, 100);
+                    }
+                    poll();
+                });
+            }
+
+            // 1 lan thu: mo dropdown -> doi items co du lieu -> click -> xac nhan
+            function oneAttempt() {
+                return new Promise(function(resolve, reject) {
+                    openDropdown();
+                    var waited = 0;
+                    function pollItems() {
+                        var item = findTargetItem();
+                        if (item) {
+                            fireClick(item);
+                            confirmSelected().then(function(ok) {
+                                if (ok) resolve();
+                                else reject(new Error('click_no_effect'));
+                            });
+                            return;
+                        }
+                        waited += ITEM_POLL_MS;
+                        if (waited >= ITEM_WAIT_MS) {
+                            reject(new Error('items_not_loaded'));
+                        } else {
+                            setTimeout(pollItems, ITEM_POLL_MS);
+                        }
+                    }
+                    setTimeout(pollItems, ITEM_POLL_MS); // doi 1 tick dau tien de popup render
+                });
+            }
+
+            // Vong lap thu lai
+            return (function attempt(n) {
+                return oneAttempt().catch(function(err) {
+                    closeDropdown();
+                    if (n < MAX_ATTEMPTS) {
+                        return sleep(600).then(function() { return attempt(n + 1); });
+                    }
+                    // Het lan thu -> loi bat buoc, KHONG bo qua benh nhan nay
+                    throw { error: true, reason: 'Không chọn được "Đối tượng *" sau ' + MAX_ATTEMPTS + ' lần thử (' + err.message + '). Cần kiểm tra lại thủ công.' };
+                });
+            })(1).then(function() { return sleep(400); });
         }).then(function() {
             return checkPauseOrStop();
         }).then(function() {
