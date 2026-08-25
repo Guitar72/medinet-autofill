@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      7.2
+// @version      7.5
 // @description  Nut Thao Tac Nhanh
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -10,7 +10,6 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        unsafeWindow
-// @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js
 // ==/UserScript==
@@ -355,6 +354,62 @@
         }
     }
 
+    /** Chon 1 option trong dx-radio-group (khac voi selectListRadioByLabel
+     *  dung cho dx-list). containerCls: class cha bao ngoai dx-radio-group. */
+    /** Click day du bo su kien (pointer + mouse + click) len 1 phan tu,
+     *  de tuong thich voi cac widget DevExtreme doi hoi mousedown/mouseup
+     *  chu khong chi pointerdown/pointerup. */
+    function fullClick(el) {
+        if (!el) return;
+        var opts = { bubbles: true, cancelable: true, view: _pageWin };
+        el.dispatchEvent(new PointerEvent('pointerdown', Object.assign({ pointerId: 1, pointerType: 'mouse' }, opts)));
+        el.dispatchEvent(new MouseEvent('mousedown', opts));
+        el.dispatchEvent(new PointerEvent('pointerup', Object.assign({ pointerId: 1, pointerType: 'mouse' }, opts)));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.dispatchEvent(new MouseEvent('click', opts));
+    }
+
+    /** Chon 1 option trong dx-radio-group (khac voi selectListRadioByLabel
+     *  dung cho dx-list). containerCls: class cha bao ngoai dx-radio-group.
+     *  Co retry: click xong kiem tra aria-checked, neu chua an thi thu lai
+     *  bang cach click vao icon/dx-item-content truoc khi bao loi. */
+    function selectRadioGroupByLabel(containerCls, label, cb, _attempt) {
+        _attempt = _attempt || 0;
+        var container = document.querySelector('.' + containerCls);
+        if (!container) { if (cb) cb(false); return; }
+        var labelNorm = label.trim().toLowerCase();
+        var found = null;
+        container.querySelectorAll('.dx-item.dx-radiobutton[role="radio"]').forEach(function(item) {
+            if (found) return;
+            var lbl = item.querySelector('.dx-item-content');
+            if (!lbl) return;
+            var txt = (lbl.textContent || '').trim().toLowerCase();
+            if (txt === labelNorm) found = item;
+        });
+        if (!found) { if (cb) cb(false); return; }
+
+        // Thu cac muc tieu click khac nhau tuy theo lan thu:
+        // 0: icon; 1: item-content (chu); 2: ca item container
+        var targets = [
+            found.querySelector('.dx-radiobutton-icon'),
+            found.querySelector('.dx-item-content'),
+            found,
+        ];
+        var target = targets[Math.min(_attempt, targets.length - 1)] || found;
+        fullClick(target);
+
+        setTimeout(function() {
+            var ok = found.getAttribute('aria-checked') === 'true';
+            if (ok) {
+                if (cb) cb(true);
+            } else if (_attempt < 2) {
+                selectRadioGroupByLabel(containerCls, label, cb, _attempt + 1);
+            } else {
+                if (cb) cb(false);
+            }
+        }, 250);
+    }
+
     function fillThongTinHanhChinh() {
         showToast('\u23f3 \u0110ang \u0111i\u1ec1n Th\u00f4ng tin h\u00e0nh ch\u00ednh...');
 
@@ -386,12 +441,34 @@
                                 // rieng trang kskdk_thongtinkham/.../KSKDK_TTHC):
                                 // chon "Lao dong tu do"
                                 setTimeout(function() {
+                                    function step6() {
+                                        // B6: Dan toc -> "Kinh" (neu co truong DanTocId)
+                                        setTimeout(function() {
+                                            function step7() {
+                                                // B7: Hinh thuc kham -> "Kham Theo Hop Dong"
+                                                // (neu co truong HinhThucChiTraKhamSK_ChiTiet)
+                                                setTimeout(function() {
+                                                    if (document.querySelector('.HinhThucChiTraKhamSK_ChiTiet')) {
+                                                        selectRadioGroupByLabel('HinhThucChiTraKhamSK_ChiTiet', 'Kh\u00e1m Theo H\u1ee3p \u0110\u1ed3ng', function(ok) {
+                                                            if (!ok) showToast('\u26a0 Kh\u00f4ng ch\u1ecdn \u0111\u01b0\u1ee3c H\u00ecnh th\u1ee9c kh\u00e1m, vui l\u00f2ng ch\u1ecdn tay');
+                                                            showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                                        });
+                                                    } else {
+                                                        showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                                    }
+                                                }, 300);
+                                            }
+                                            if (document.querySelector('.DanTocId')) {
+                                                typeAndEnterSelectBox('DanTocId', 'Kinh', step7);
+                                            } else {
+                                                step7();
+                                            }
+                                        }, 300);
+                                    }
                                     if (document.querySelector('.NgheNghiepId')) {
-                                        selectDxSelectBox('NgheNghiepId', 'Lao \u0111\u1ed9ng t\u1ef1 do', function() {
-                                            showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
-                                        });
+                                        selectDxSelectBox('NgheNghiepId', 'Lao \u0111\u1ed9ng t\u1ef1 do', step6);
                                     } else {
-                                        showToast('\u2705 \u0110\u00e3 \u0111i\u1ec1n xong: Th\u00f4ng tin h\u00e0nh ch\u00ednh');
+                                        step6();
                                     }
                                 }, 300);
                             }
@@ -668,6 +745,143 @@
         next();
     }
 
+    // Quet toan bo cac cap radio "Co" / "Khong" tren trang "Tien su benh cua
+    // doi tuong" (bao gom cac dong trong bang STT 1..N va cac cau hoi rieng
+    // le nhu "Cau hoi khac") va tu dong chon "Khong".
+    // Ho tro ca 2 kieu widget: dx-list option (giong cot Bac si danh gia
+    // trong bang) va dx-radiobutton/dx-radiogroup (cau hoi don le ngoai bang).
+    // Luu y: JS regex \b khong nhan dien dung bien tu sau ky tu co dau
+    // tieng Viet (vd "Co" ket thuc bang "o" co dau, khong phai ky tu \w
+    // ASCII), nen KHONG dung /^Co\b/ de so khop. Dung startsWith thay the.
+    function isCoText(txt) {
+        return txt === 'C\u00f3' || txt.indexOf('C\u00f3,') === 0 ||
+            txt.indexOf('C\u00f3 ') === 0 || txt.indexOf('C\u00f3(') === 0;
+    }
+    function isKhongText(txt) {
+        return txt === 'Kh\u00f4ng' || txt.indexOf('Kh\u00f4ng,') === 0 ||
+            txt.indexOf('Kh\u00f4ng ') === 0 || txt.indexOf('Kh\u00f4ng(') === 0;
+    }
+
+    function tickKhongTrongBangNCT() {
+        var count = 0;
+        document.querySelectorAll('tr[role="row"]').forEach(function(row) {
+            var evalCell = row.querySelector('td[aria-colindex="3"]') || row;
+            var options = evalCell.querySelectorAll('.dx-item.dx-list-item[role="option"]');
+            if (options.length < 2) return;
+            var found = null, hasCo = false, hasKhong = false;
+            options.forEach(function(opt) {
+                var lbl = opt.querySelector('.dx-item-content.dx-list-item-content');
+                var txt = lbl ? (lbl.textContent || '').trim() : '';
+                if (isCoText(txt)) hasCo = true;
+                if (isKhongText(txt)) { hasKhong = true; found = opt; }
+            });
+            if (!hasCo || !hasKhong || !found) return;
+            var radio = found.querySelector('.dx-list-select-radiobutton[role="radio"]');
+            if (radio && radio.getAttribute('aria-checked') === 'true') return;
+            pointerClick(found);
+            count++;
+        });
+        return count;
+    }
+
+    function tickKhongRadioGroupNCT() {
+        var count = 0;
+        document.querySelectorAll('[role="radiogroup"], .dx-radiogroup').forEach(function(group) {
+            var items = group.querySelectorAll('.dx-item.dx-radiobutton[role="radio"]');
+            if (items.length < 2) return;
+            var hasCo = false, target = null;
+            items.forEach(function(it) {
+                var lbl = it.querySelector('.dx-item-content');
+                var txt = lbl ? (lbl.textContent || '').trim() : '';
+                // Nhan dien linh hoat: "Co" co the co hau to nhu
+                // "Co, (Neu co, xin hay liet ke...)"
+                if (isCoText(txt)) hasCo = true;
+                if (isKhongText(txt)) target = it;
+            });
+            if (!hasCo || !target) return;
+            if (target.getAttribute('aria-checked') === 'true') return;
+            var icon = target.querySelector('.dx-radiobutton-icon');
+            fullClick(icon || target.querySelector('.dx-item-content') || target);
+            count++;
+        });
+        return count;
+    }
+
+    function tickKhongNativeRadioNCT() {
+        var count = 0;
+        var handledGroups = {};
+        // Radio kieu Angular Material (mat-radio-button) hoac input[type=radio] thuong,
+        // dung cho cac cau hoi don le nhu "3. Cau hoi khac" (khong phai dx-widget).
+        document.querySelectorAll('mat-radio-group, [role="radiogroup"]:not(.dx-radiogroup)').forEach(function(group) {
+            if (group.querySelector('.dx-radiobutton')) return; // da xu ly o pass dx-radiogroup
+            var buttons = group.querySelectorAll('mat-radio-button, label');
+            if (buttons.length < 2) return;
+            var hasCo = false, target = null, targetInput = null;
+            buttons.forEach(function(btn) {
+                var txt = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+                if (isCoText(txt)) hasCo = true;
+                if (isKhongText(txt)) {
+                    target = btn;
+                    targetInput = btn.querySelector('input[type="radio"]') || btn.closest('mat-radio-button');
+                }
+            });
+            if (!hasCo || !target) return;
+            var isChecked = target.matches('[class*="checked"], [aria-checked="true"]') ||
+                (targetInput && targetInput.tagName === 'INPUT' && targetInput.checked) ||
+                (target.querySelector('input[type="radio"]') && target.querySelector('input[type="radio"]').checked);
+            if (isChecked) return;
+            pointerClick(target.querySelector('.mat-radio-container') || target.querySelector('input[type="radio"]') || target);
+            count++;
+        });
+
+        // Fallback: cap input[type=radio] thuong nam gan nhau, nhom theo "name",
+        // co 1 option la "Co" va 1 option la "Khong" (khong thuoc mat-radio-group/dx).
+        var byName = {};
+        document.querySelectorAll('input[type="radio"]').forEach(function(inp) {
+            if (inp.closest('.dx-radiobutton, mat-radio-group')) return;
+            var key = inp.name || ('__noname_' + (inp.closest('form, .dx-item, tr') ? 1 : 0));
+            if (!byName[key]) byName[key] = [];
+            byName[key].push(inp);
+        });
+        Object.keys(byName).forEach(function(key) {
+            if (handledGroups[key]) return;
+            var inputs = byName[key];
+            if (inputs.length < 2) return;
+            var hasCo = false, target = null;
+            inputs.forEach(function(inp) {
+                var lbl = inp.closest('label') ||
+                    (inp.id ? document.querySelector('label[for="' + inp.id + '"]') : null) ||
+                    inp.parentElement;
+                var txt = lbl ? (lbl.textContent || '').replace(/\s+/g, ' ').trim() : '';
+                if (isCoText(txt)) hasCo = true;
+                if (isKhongText(txt)) target = inp;
+            });
+            if (!hasCo || !target || target.checked) return;
+            pointerClick(target);
+            target.checked = true;
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+            count++;
+        });
+        return count;
+    }
+
+    function autoTienSuCoNangKhong(doneCallback) {
+        var total = 0;
+        function pass() {
+            return tickKhongTrongBangNCT() + tickKhongRadioGroupNCT() + tickKhongNativeRadioNCT();
+        }
+        total += pass();
+        // Chay lai 2 lan nua (cach nhau 350ms) de bat cac dong render tre
+        // (vd Angular/DevExtreme dung virtual scroll hoac vua chuyen tab).
+        setTimeout(function() {
+            total += pass();
+            setTimeout(function() {
+                total += pass();
+                if (doneCallback) doneCallback(total);
+            }, 350);
+        }, 350);
+    }
+
     var NCT_THA_DTD = [
         { code: 'D1',    opt: 'Có' },
         { code: 'D1.1',  opt: 'Có' },
@@ -935,6 +1149,44 @@
             }
         },
         {
+            emoji: '\ud83e\udde0', label: 'Ti\u1ec1n s\u1eed kh\u00e1m c\u01a1 n\u0103ng',
+            tier: 'pro',
+            color: '#8e24aa', hoverColor: '#6a1b9a',
+            // Kha dung tren trang "Tien su benh cua doi tuong" (NCT)
+            check: function() {
+                return window.location.href.indexOf('TienSuBenhCuaDoiTuong') !== -1;
+            },
+            fn: function() {
+                showToast('\u23f3 \u0110ang t\u00edch "Kh\u00f4ng" cho to\u00e0n b\u1ed9 ti\u1ec1n s\u1eed...');
+                autoTienSuCoNangKhong(function(count) {
+                    if (count > 0) {
+                        showToast('\u2705 \u0110\u00e3 t\u00edch "Kh\u00f4ng" cho ' + count + ' m\u1ee5c ti\u1ec1n s\u1eed');
+                    } else {
+                        showToast('\u26a0 Kh\u00f4ng t\u00ecm th\u1ea5y m\u1ee5c n\u00e0o \u0111\u1ec3 t\u00edch, vui l\u00f2ng ki\u1ec3m tra l\u1ea1i trang');
+                    }
+                });
+            }
+        },
+        {
+            emoji: '\ud83e\udde0', label: 'Ti\u1ec1n s\u1eed b\u1ea3n th\u00e2n',
+            tier: 'pro',
+            color: '#8e24aa', hoverColor: '#6a1b9a',
+            // Kha dung tren trang "Tien su" cua phieu Thong tin hanh chinh (KSKDK_TTHC_TienSu)
+            check: function() {
+                return window.location.href.indexOf('KSKDK_TTHC_TienSu') !== -1;
+            },
+            fn: function() {
+                showToast('\u23f3 \u0110ang t\u00edch "Kh\u00f4ng" cho to\u00e0n b\u1ed9 ti\u1ec1n s\u1eed...');
+                autoTienSuCoNangKhong(function(count) {
+                    if (count > 0) {
+                        showToast('\u2705 \u0110\u00e3 t\u00edch "Kh\u00f4ng" cho ' + count + ' m\u1ee5c ti\u1ec1n s\u1eed');
+                    } else {
+                        showToast('\u26a0 Kh\u00f4ng t\u00ecm th\u1ea5y m\u1ee5c n\u00e0o \u0111\u1ec3 t\u00edch, vui l\u00f2ng ki\u1ec3m tra l\u1ea1i trang');
+                    }
+                });
+            }
+        },
+        {
             emoji: '\ud83d\udcdd', label: 'Kh\u00e1m l\u00e2m s\u00e0ng ng\u01b0\u1eddi >18 tu\u1ed5i (M3)',
             tier: 'lite',
             color: '#2e7d32', hoverColor: '#1b5e20',
@@ -954,7 +1206,7 @@
                     setNumberField('Mat_KhongKinh_MP', '10');
                     setNumberField('Mat_KhongKinh_MT', '10');
                     fillCommonNumbers();
-                    showToast('\ud83d\udcdd \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I (M13)');
+                    showToast('\ud83d\udcdd \u0110\u00e3 \u0111i\u1ec1n: Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng + Lo\u1ea1i I (M3)');
                 }, 400);
             }
         },
@@ -1518,39 +1770,6 @@
             }
         },
         {
-            emoji: '\ud83c\udfe5', label: 'Th\u00f4ng tin kh\u00e1m NCT b\u1ec7nh l\u00fd (M4)',
-            tier: 'lite',
-            color: '#1565c0', hoverColor: '#0d47a1',
-            // Kha dung khi URL chua "KNCT_ThongTinKham" (trang M14)
-            check: function() {
-                return window.location.href.indexOf('KNCT_ThongTinKham') !== -1;
-            },
-            fn: function() {
-                resetAll();
-                setTimeout(function() {
-                    tickAllChuaPhatHien(['NoiKhoa_ChuaPhatHienBatThuong', 'Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong']);
-                    ['NoiKhoa_ChuaPhatHienBatThuong', 'Mat_ChuaPhatHienBatThuong', 'RHM_ChuaPhatHienBatThuong'].forEach(function(cls) {
-                        var cb = document.querySelector('.' + cls + ' dx-check-box[role="checkbox"]');
-                        if (cb) untickCheckbox(cb);
-                    });
-                    selectRadioMultiException(['NoiKhoa_PhanLoai', 'Mat_PhanLoai', 'RHM_PhanLoai'], 'Lo\u1ea1i III', 'Lo\u1ea1i I');
-                    fillCommonNumbers();
-                    ['I10', 'I25.5', 'E11.9'].forEach(function(code, idx) {
-                        setTimeout(function() {
-                            fillTagBox('NoiKhoa_ChanDoanXacDinh_ICD', code);
-                        }, 1500 * (idx + 1));
-                    });
-                    setTimeout(function() {
-                        fillTagBox('Mat_ChanDoanXacDinh_ICD', 'H25.0');
-                    }, 1500 * 4);
-                    setTimeout(function() {
-                        fillTagBox('RHM_ChanDoanXacDinh_ICD', 'K08.1');
-                        showToast('\ud83c\udfe5 Th\u00f4ng tin kh\u00e1m NCT b\u1ec7nh l\u00fd \u0111\u00e3 \u0111i\u1ec1n xong!');
-                    }, 1500 * 5);
-                }, 400);
-            }
-        },
-        {
             emoji: '\ud83d\udcc1', label: 'KSK Vi\u1ec7c l\u00e0m + L\u00e1i xe',
             tier: 'pro',
             color: '#2e7d32', hoverColor: '#1b5e20',
@@ -1569,7 +1788,7 @@
             }
         },
         {
-            emoji: '\ud83d\udc66', label: 'Kh\u00e1m l\u00e2m s\u00e0ng 6-18 tu\u1ed5i kh\u00f4ng \u0111i h\u1ecdc (M2)',
+            emoji: '\ud83d\udc66', label: 'Kh\u00e1m l\u00e2m s\u00e0ng 6-18 tu\u1ed5i kh\u00f4ng \u0111i h\u1ecdc (M12)',
             tier: 'lite',
             color: '#e65100', hoverColor: '#bf360c',
             // Kha dung tren trang KSKD18_ThongTinKham (M12)
