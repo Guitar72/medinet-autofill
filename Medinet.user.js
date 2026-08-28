@@ -1632,15 +1632,15 @@
                             { code: 'D8.1.4', opt: 'C\u00f3' },
                             { code: 'D8.1.5', opt: 'C\u00f3' },
                             { code: 'D8.1.6', opt: 'C\u00f3' },
-                            // D8.3
-                            { code: 'D8.3.1', opt: 'C\u00f3' },
-                            { code: 'D8.3.2', opt: 'C\u00f3' },
-                            { code: 'D8.3.3', opt: 'C\u00f3' },
-                            { code: 'D8.3.4', opt: 'C\u00f3' },
-                            { code: 'D8.3.5', opt: 'C\u00f3' },
-                            { code: 'D8.3.6', opt: 'C\u00f3' },   // Lai xe: Co (duoi 40 tuoi con lai duoc)
-                            { code: 'D8.3.7', opt: 'C\u00f3' },
-                            { code: 'D8.3.8', opt: 'C\u00f3' },
+                            // D8.2 - Sinh hoat hang ngay (IADL)
+                            { code: 'D8.2.1', opt: 'C\u00f3' },
+                            { code: 'D8.2.2', opt: 'C\u00f3' },
+                            { code: 'D8.2.3', opt: 'C\u00f3' },
+                            { code: 'D8.2.4', opt: 'C\u00f3' },
+                            { code: 'D8.2.5', opt: 'C\u00f3' },
+                            { code: 'D8.2.6', opt: 'C\u00f3' },   // Lai xe: Co (duoi 40 tuoi con lai duoc)
+                            { code: 'D8.2.7', opt: 'C\u00f3' },
+                            { code: 'D8.2.8', opt: 'C\u00f3' },
                             // D8.3
                             { code: 'D8.3.1', opt: 'Kh\u00f4ng/M\u1ed9t s\u1ed1 l\u1ea7n' },
                             { code: 'D8.3.2', opt: 'Kh\u00f4ng' },
