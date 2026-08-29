@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      9.0
+// @version      10.5
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -947,14 +947,14 @@
         { code: 'D8.1.4', opt: 'Có' },
         { code: 'D8.1.5', opt: 'Có' },
         { code: 'D8.1.6', opt: 'Có' },
-        { code: 'D8.3.1', opt: 'Có' },
-        { code: 'D8.3.2', opt: 'Có' },
-        { code: 'D8.3.3', opt: 'Có' },
-        { code: 'D8.3.4', opt: 'Có' },
-        { code: 'D8.3.5', opt: 'Có' },
-        { code: 'D8.3.6', opt: 'Không' },
-        { code: 'D8.3.7', opt: 'Có' },
-        { code: 'D8.3.8', opt: 'Có' },
+        { code: 'D8.2.1', opt: 'Có' },
+        { code: 'D8.2.2', opt: 'Có' },
+        { code: 'D8.2.3', opt: 'Có' },
+        { code: 'D8.2.4', opt: 'Có' },
+        { code: 'D8.2.5', opt: 'Có' },
+        { code: 'D8.2.6', opt: 'Không' },
+        { code: 'D8.2.7', opt: 'Có' },
+        { code: 'D8.2.8', opt: 'Có' },
         { code: 'D8.3.1', opt: 'Không/Một số lần' },
         { code: 'D8.3.2', opt: 'Không' },
         { code: 'D8.3.3', opt: 'Không' },
@@ -1245,12 +1245,19 @@
         }
     }
 
-    // Goi tu dong khi trang thay doi (chi khi da kich hoat license)
+    // Goi tu dong khi trang thay doi (chi khi con Medi). Ham nay co the bi
+    // MutationObserver goi NHIEU LAN cho CUNG 1 trang - dung 1 "chot" theo
+    // URL de CHI TRU CREDIT 1 LAN MOI TRANG, tranh tinh phi trung lap.
+    var _te6LastBilledUrl = null;
     function te6RunAutoFillIfLicensed() {
         if (!isLicenseValid()) return;
         te6AutoFillCurrentPage();
         te6AutoFillKhamLamSang();
         te6AutoFillThongTinHanhChinh();
+        if (_te6LastBilledUrl !== location.href) {
+            _te6LastBilledUrl = location.href;
+            spendCredits(DEFAULT_ACTION_COST);
+        }
     }
 
     // ================================================================
@@ -1345,7 +1352,9 @@
                 closeSubmenu();
                 var menu = document.getElementById('_mtt_menu');
                 if (menu) menu.style.display = 'none';
+                if (!isLicenseValid()) { showLicenseExpiredPopup(); return; }
                 sub.fn();
+                spendCredits(sub.creditCost || DEFAULT_ACTION_COST);
             });
             sm.appendChild(btn);
             visibleSubCount++;
@@ -1745,16 +1754,16 @@
                             { code: 'D8.1.4', opt: 'C\u00f3' },
                             { code: 'D8.1.5', opt: 'C\u00f3' },
                             { code: 'D8.1.6', opt: 'C\u00f3' },
-                            // D8.3 - Sinh hoat hang ngay (IADL)
-                            // D8.3.6 (Lai xe): "Co" - khac voi nhom >= 61 tick "Khong"
-                            { code: 'D8.3.1', opt: 'C\u00f3' },
-                            { code: 'D8.3.2', opt: 'C\u00f3' },
-                            { code: 'D8.3.3', opt: 'C\u00f3' },
-                            { code: 'D8.3.4', opt: 'C\u00f3' },
-                            { code: 'D8.3.5', opt: 'C\u00f3' },
-                            { code: 'D8.3.6', opt: 'C\u00f3' },   // Lai xe: Co (41-60 con lai xe binh thuong)
-                            { code: 'D8.3.7', opt: 'C\u00f3' },
-                            { code: 'D8.3.8', opt: 'C\u00f3' },
+                            // D8.2 - Sinh hoat hang ngay (IADL)
+                            // D8.2.6 (Lai xe): "Co" - khac voi nhom >= 61 tick "Khong"
+                            { code: 'D8.2.1', opt: 'C\u00f3' },
+                            { code: 'D8.2.2', opt: 'C\u00f3' },
+                            { code: 'D8.2.3', opt: 'C\u00f3' },
+                            { code: 'D8.2.4', opt: 'C\u00f3' },
+                            { code: 'D8.2.5', opt: 'C\u00f3' },
+                            { code: 'D8.2.6', opt: 'C\u00f3' },   // Lai xe: Co (41-60 con lai xe binh thuong)
+                            { code: 'D8.2.7', opt: 'C\u00f3' },
+                            { code: 'D8.2.8', opt: 'C\u00f3' },
                             // D8.3 - Suy yeu the chat
                             { code: 'D8.3.1', opt: 'Kh\u00f4ng/M\u1ed9t s\u1ed1 l\u1ea7n' },
                             { code: 'D8.3.2', opt: 'Kh\u00f4ng' },
@@ -1848,13 +1857,13 @@
                             { code: 'D8.1.1', opt: 'C\u00f3' }, { code: 'D8.1.2', opt: 'C\u00f3' },
                             { code: 'D8.1.3', opt: 'C\u00f3' }, { code: 'D8.1.4', opt: 'C\u00f3' },
                             { code: 'D8.1.5', opt: 'C\u00f3' }, { code: 'D8.1.6', opt: 'C\u00f3' },
-                            // D8.3 - Sinh hoat hang ngay (IADL)
-                            // D8.3.6 (Lai xe): "Khong" - nguoi 61-70 giam kha nang lai xe
+                            // D8.2 - Sinh hoat hang ngay (IADL)
+                            // D8.2.6 (Lai xe): "Khong" - nguoi 61-70 giam kha nang lai xe
                             // khac voi nhom 41-60 tick "Co"
-                            { code: 'D8.3.1', opt: 'C\u00f3' }, { code: 'D8.2.2', opt: 'C\u00f3' },
-                            { code: 'D8.3.3', opt: 'C\u00f3' }, { code: 'D8.2.4', opt: 'C\u00f3' },
-                            { code: 'D8.3.5', opt: 'C\u00f3' }, { code: 'D8.2.6', opt: 'Kh\u00f4ng' }, // Lai xe: Khong
-                            { code: 'D8.3.7', opt: 'C\u00f3' }, { code: 'D8.2.8', opt: 'C\u00f3' },
+                            { code: 'D8.2.1', opt: 'C\u00f3' }, { code: 'D8.2.2', opt: 'C\u00f3' },
+                            { code: 'D8.2.3', opt: 'C\u00f3' }, { code: 'D8.2.4', opt: 'C\u00f3' },
+                            { code: 'D8.2.5', opt: 'C\u00f3' }, { code: 'D8.2.6', opt: 'Kh\u00f4ng' }, // Lai xe: Khong
+                            { code: 'D8.2.7', opt: 'C\u00f3' }, { code: 'D8.2.8', opt: 'C\u00f3' },
                             // D8.3 - Suy yeu the chat
                             { code: 'D8.3.1', opt: 'Kh\u00f4ng/M\u1ed9t s\u1ed1 l\u1ea7n' },
                             { code: 'D8.3.2', opt: 'Kh\u00f4ng' }, { code: 'D8.3.3', opt: 'Kh\u00f4ng' },
@@ -1944,15 +1953,15 @@
                             { code: 'D8.1.1', opt: 'C\u00f3' }, { code: 'D8.1.2', opt: 'C\u00f3' },
                             { code: 'D8.1.3', opt: 'C\u00f3' }, { code: 'D8.1.4', opt: 'C\u00f3' },
                             { code: 'D8.1.5', opt: 'C\u00f3' }, { code: 'D8.1.6', opt: 'C\u00f3' },
-                            // D8.3 - Sinh hoat hang ngay (IADL): giam nhieu kha nang
-                            { code: 'D8.3.1', opt: 'Kh\u00f4ng' }, // Tu nghe dt: Khong
-                            { code: 'D8.3.2', opt: 'Kh\u00f4ng' }, // Tu mua sam: Khong
-                            { code: 'D8.3.3', opt: 'Kh\u00f4ng' }, // Tu nau an: Khong
-                            { code: 'D8.3.4', opt: 'Kh\u00f4ng' }, // Tu don nha: Khong
-                            { code: 'D8.3.5', opt: 'C\u00f3' },    // Tu giat do: Co
-                            { code: 'D8.3.6', opt: 'Kh\u00f4ng' }, // Lai xe: Khong
-                            { code: 'D8.3.7', opt: 'C\u00f3' },    // Tu uong thuoc: Co
-                            { code: 'D8.3.8', opt: 'C\u00f3' },    // Quan ly tien: Co
+                            // D8.2 - Sinh hoat hang ngay (IADL): giam nhieu kha nang
+                            { code: 'D8.2.1', opt: 'Kh\u00f4ng' }, // Tu nghe dt: Khong
+                            { code: 'D8.2.2', opt: 'Kh\u00f4ng' }, // Tu mua sam: Khong
+                            { code: 'D8.2.3', opt: 'Kh\u00f4ng' }, // Tu nau an: Khong
+                            { code: 'D8.2.4', opt: 'Kh\u00f4ng' }, // Tu don nha: Khong
+                            { code: 'D8.2.5', opt: 'C\u00f3' },    // Tu giat do: Co
+                            { code: 'D8.2.6', opt: 'Kh\u00f4ng' }, // Lai xe: Khong
+                            { code: 'D8.2.7', opt: 'C\u00f3' },    // Tu uong thuoc: Co
+                            { code: 'D8.2.8', opt: 'C\u00f3' },    // Quan ly tien: Co
                             // D8.3 - Suy yeu the chat: bat dau co dau hieu suy yeu
                             { code: 'D8.3.1', opt: 'Kh\u00f4ng/M\u1ed9t s\u1ed1 l\u1ea7n' },
                             { code: 'D8.3.2', opt: 'C\u00f3' },    // Kho leo 10 bac thang: Co
@@ -2037,15 +2046,15 @@
                             { code: 'D8.1.1', opt: 'C\u00f3' }, { code: 'D8.1.2', opt: 'C\u00f3' },
                             { code: 'D8.1.3', opt: 'C\u00f3' }, { code: 'D8.1.4', opt: 'C\u00f3' },
                             { code: 'D8.1.5', opt: 'C\u00f3' }, { code: 'D8.1.6', opt: 'C\u00f3' },
-                            // D8.3 - Sinh hoat hang ngay (IADL): giam nang, chi con uong thuoc & quan ly tien
-                            { code: 'D8.3.1', opt: 'Kh\u00f4ng' }, // Tu nghe dt: Khong
-                            { code: 'D8.3.2', opt: 'Kh\u00f4ng' }, // Tu mua sam: Khong
-                            { code: 'D8.3.3', opt: 'Kh\u00f4ng' }, // Tu nau an: Khong
-                            { code: 'D8.3.4', opt: 'Kh\u00f4ng' }, // Tu don nha: Khong
-                            { code: 'D8.3.5', opt: 'Kh\u00f4ng' }, // Tu giat do: Khong (khac 71-80)
-                            { code: 'D8.3.6', opt: 'Kh\u00f4ng' }, // Lai xe: Khong
-                            { code: 'D8.3.7', opt: 'C\u00f3' },    // Tu uong thuoc: Co
-                            { code: 'D8.3.8', opt: 'C\u00f3' },    // Quan ly tien: Co
+                            // D8.2 - Sinh hoat hang ngay (IADL): giam nang, chi con uong thuoc & quan ly tien
+                            { code: 'D8.2.1', opt: 'Kh\u00f4ng' }, // Tu nghe dt: Khong
+                            { code: 'D8.2.2', opt: 'Kh\u00f4ng' }, // Tu mua sam: Khong
+                            { code: 'D8.2.3', opt: 'Kh\u00f4ng' }, // Tu nau an: Khong
+                            { code: 'D8.2.4', opt: 'Kh\u00f4ng' }, // Tu don nha: Khong
+                            { code: 'D8.2.5', opt: 'Kh\u00f4ng' }, // Tu giat do: Khong (khac 71-80)
+                            { code: 'D8.2.6', opt: 'Kh\u00f4ng' }, // Lai xe: Khong
+                            { code: 'D8.2.7', opt: 'C\u00f3' },    // Tu uong thuoc: Co
+                            { code: 'D8.2.8', opt: 'C\u00f3' },    // Quan ly tien: Co
                             // D8.3 - Suy yeu the chat: nang hon, met hau het thoi gian
                             { code: 'D8.3.1', opt: 'T\u1ea5t c\u1ea3 m\u1ecdi l\u00fac/ h\u1ea7u h\u1ebft th\u1eddi gian' },
                             { code: 'D8.3.2', opt: 'C\u00f3' },    // Kho leo 10 bac thang: Co
@@ -2158,13 +2167,116 @@
     // ================================================================
     //  HE THONG LICENSE V2
     //  - Machine ID: fingerprint trinh duyet (chi doc, khong the gia mao)
-    //  - License code: do TAC GIA tao bang trang HTML rieng (secret key chi tac gia biet)
-    //  - Han dung: het cuoi thang. Neu kich hoat tu ngay 20 tro di -> cong them 1 thang
-    //  - Script chi VERIFY, nguoi dung KHONG the tu sinh license hop le
+    //  - So du Medi: luu tren Cloudflare Worker + D1 (nguon su that duy nhat),
+    //    client CHI cache lai de hien thi nhanh + tru lac quan, khong tu
+    //    sinh duoc so du - moi thay doi thuc su deu qua goi API Worker.
+    //  - 1.000d = 1 Medi = 100 luot autofill/autoclick
+    //  - Dung thu: +5 Medi, CHI 1 LAN/MAY (Worker khoa qua co trial_used)
     // ================================================================
-    var LICENSE_KEY = '_mtt_license_v2';
 
-    // Ham hash djb2 don gian (dung de tao/verify code)
+    // TODO: doi thanh URL Worker that sau khi deploy (xem huong dan trien khai)
+    var WALLET_API = 'https://medinet-wallet.dha-medinet.workers.dev';
+    var WALLET_KEY = '_mtt_wallet_cache_v1';
+    var DEFAULT_ACTION_COST = 8; // uoc luong so luot (click/dien truong) trung binh 1 lan bam "Thao tac nhanh"
+
+    // ================================================================
+    //  XAC THUC SO DU BANG CHU KY SO (ECDSA P-256) - CHONG khach tu sua
+    //  tay so du trong Tampermonkey Dashboard > Storage (khong can dung
+    //  code van sua duoc gia tri luu trong GM storage). Worker giu KHOA
+    //  RIENG TU (bi mat, chi o server) de KY moi lan tra ve so du; script
+    //  nay chi giu KHOA CONG KHAI (an toan khi bi doc - chi dung de KIEM
+    //  TRA chu ky, khong the dung de TAO chu ky moi). Neu ai do sua tay
+    //  gia tri trong token (vd doi balance) ma khong co khoa rieng tu,
+    //  chu ky se KHONG con khop -> script tu dong coi nhu KHONG HOP LE,
+    //  balance hieu luc = 0, bat buoc phai lay token that tu Worker.
+    // ================================================================
+    var WALLET_PUBLIC_JWK = {
+        kty: 'EC', crv: 'P-256',
+        x: 'l6Z_atNLQ_jvgC3uk6J3hqAJy7FgvH4qVT0qkpRLuQ0',
+        y: 'RL9H0U5QVyH7aL7gufqygwz-n9KtIuESjK6qYyTH3zU'
+    };
+    var _walletPublicKeyPromise = null;
+    function getWalletPublicKey() {
+        if (!_walletPublicKeyPromise) {
+            _walletPublicKeyPromise = crypto.subtle.importKey(
+                'jwk', WALLET_PUBLIC_JWK, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+            ).catch(function() { return null; });
+        }
+        return _walletPublicKeyPromise;
+    }
+
+    function base64UrlToBytes(b64url) {
+        var b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        var bin = atob(b64);
+        var bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+    }
+
+    // So du DA XAC THUC hien tai - CHI bien nay (trong bo nho, khong luu
+    // storage) duoc dung de QUYET DINH mo/khoa tinh nang. Reset ve 0 moi
+    // lan tai trang, chi duoc nap lai sau khi VERIFY chu ky thanh cong.
+    var _verifiedWallet = { balance: 0, estimatedBalance: 0, trialUsed: false, exp: 0 };
+
+    function isVerifiedWalletFresh() {
+        return _verifiedWallet.exp > Math.floor(Date.now() / 1e3);
+    }
+
+    // Kiem tra chu ky cua 1 token "payload.sig" (dang Worker tra ve).
+    // Tra ve Promise<boolean|object> - object khi hop le (da parse payload),
+    // false khi chu ky sai / het han / mid khong khop may hien tai.
+    function verifyWalletToken(token, expectMid) {
+        if (!token || token.indexOf('.') === -1) return Promise.resolve(false);
+        var parts = token.split('.');
+        if (parts.length !== 2) return Promise.resolve(false);
+        var payloadPart = parts[0], sigPart = parts[1];
+        return getWalletPublicKey().then(function(pubKey) {
+            if (!pubKey) return false;
+            var sigBytes = base64UrlToBytes(sigPart);
+            var msgBytes = new TextEncoder().encode(payloadPart);
+            return crypto.subtle.verify(
+                { name: 'ECDSA', hash: 'SHA-256' }, pubKey, sigBytes, msgBytes
+            ).then(function(ok) {
+                if (!ok) return false;
+                var payload;
+                try {
+                    payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payloadPart)));
+                } catch (e) { return false; }
+                if (expectMid && payload.mid !== expectMid) return false;
+                if (!payload.exp || payload.exp < Math.floor(Date.now() / 1e3)) return false;
+                return payload;
+            });
+        }).catch(function() { return false; });
+    }
+
+    // Ap dung 1 token da xac thuc THANH CONG vao _verifiedWallet + luu lai
+    // token tho (de lan tai trang sau co the verify lai ngay, khong can
+    // cho goi mang). KHONG BAO GIO ghi thang so balance vao storage nua -
+    // chi ghi token (sua tay token se lam sai chu ky, vo dung).
+    function applyVerifiedToken(payload, rawToken) {
+        _verifiedWallet = {
+            balance: payload.balance,
+            estimatedBalance: (typeof payload.estimatedBalance === 'number') ? payload.estimatedBalance : payload.balance,
+            trialUsed: !!payload.trialUsed,
+            exp: payload.exp
+        };
+        try { GM_setValue(WALLET_KEY, rawToken); } catch (e) {}
+    }
+
+    // Tai token da luu tu lan truoc (neu con han) ngay khi script khoi
+    // dong, de khong phai cho goi mang moi lan mo trang van co the mo
+    // khoa tinh nang (token con han toi da 20 phut).
+    function initWalletFromCache() {
+        var raw = null;
+        try { raw = GM_getValue(WALLET_KEY, null); } catch (e) {}
+        if (!raw || typeof raw !== 'string') return;
+        verifyWalletToken(raw, getMachineId()).then(function(payload) {
+            if (payload) applyVerifiedToken(payload, raw);
+        });
+    }
+
+    // Ham hash djb2 don gian (dung de tinh Machine ID)
     function _djb2(str) {
         var h = 5381;
         for (var i = 0; i < str.length; i++) {
@@ -2303,8 +2415,160 @@
         return 'MID-' + _djb2(raw);
     }
 
+    // Doc cache vi (dang tuong thich nguoc cho cac cho hien thi UI cu) -
+    // GIA TRI THAT nam trong _verifiedWallet (chi cap nhat sau khi verify
+    // chu ky thanh cong), khong con lay thang tu storage nua.
+    var WALLET_UNSYNCED_KEY = '_mtt_unsynced_clicks_v1';
+    function getUnsyncedClicks() {
+        try { var v = GM_getValue(WALLET_UNSYNCED_KEY, 0); return typeof v === 'number' ? v : 0; }
+        catch (e) { return 0; }
+    }
+    function setUnsyncedClicks(v) {
+        try { GM_setValue(WALLET_UNSYNCED_KEY, v); } catch (e) {}
+    }
+    function getWalletCache() {
+        return {
+            balance: _verifiedWallet.balance,
+            estimatedBalance: _verifiedWallet.estimatedBalance,
+            trialUsed: _verifiedWallet.trialUsed,
+            unsyncedClicks: getUnsyncedClicks()
+        };
+    }
+
+    // Con Medi (dung de khoa/mo tinh nang). CHI doc _verifiedWallet (da
+    // qua kiem tra chu ky + con han) - khong goi mang o day vi ham nay
+    // duoc goi RAT THUONG XUYEN (moi lan mo menu, moi lan chay autofill).
+    function isLicenseValid() {
+        return isVerifiedWalletFresh() && _verifiedWallet.balance > 0;
+    }
+    function getWalletBalance() {
+        return isVerifiedWalletFresh() ? _verifiedWallet.balance : 0;
+    }
+
+    // Dong bo so du moi nhat tu Worker (goi khi mo menu License / bam
+    // "Lam moi so du" - KHONG chan luong autofill, chay ngam). Token tra
+    // ve PHAI qua verifyWalletToken() truoc khi duoc tin - khong con gan
+    // thang data.balance/data.estimatedBalance vao cache nhu truoc.
+    function refreshWalletBalance(cb) {
+        var mid = getMachineId();
+        fetch(WALLET_API + '/balance?mid=' + encodeURIComponent(mid))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                return verifyWalletToken(data.token, mid).then(function(payload) {
+                    if (payload) applyVerifiedToken(payload, data.token);
+                    if (cb) cb(!!payload, getWalletCache());
+                });
+            })
+            .catch(function() { if (cb) cb(false, getWalletCache()); });
+    }
+
+    // Kich hoat dung thu: +5 Medi, CHI 1 LAN/MAY - Worker tu chan lan 2
+    // (co trial_used trong D1, khong phu thuoc du lieu cuc bo nen xoa
+    // cache/cai lai script cung khong dung thu lai duoc). Token tra ve
+    // cung phai qua verify truoc khi duoc ap dung.
+    function activateTrial(onDone) {
+        var mid = getMachineId();
+        fetch(WALLET_API + '/trial', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mid: mid }),
+        })
+        .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+        .then(function(res) {
+            if (res.status === 200) {
+                return verifyWalletToken(res.data.token, mid).then(function(payload) {
+                    if (!payload) { onDone(false, 'loi'); return; }
+                    applyVerifiedToken(payload, res.data.token);
+                    onDone(true, payload.balance);
+                });
+            } else {
+                onDone(false, res.data && res.data.error === 'trial_already_used'
+                    ? 'da_dung_thu' : 'loi');
+            }
+        })
+        .catch(function() { onDone(false, 'network'); });
+    }
+
+    // Nguong canh bao sap het Medi (tinh theo luot con lai, khong phai Medi
+    // nguyen, de canh bao som truoc khi thuc su bi khoa).
+    var LOW_BALANCE_CLICKS = 300; // ~3 Medi
+
+    // Tru credit khi 1 "Thao tac nhanh" vua chay xong.
+    // - Tru LAC QUAN o bo nho NGAY LAP TUC (uoc luong theo ty le) de UI/
+    //   khoa tinh nang phan hoi tuc thi, KHONG cho action.fn() phai cho
+    //   ket qua mang -> khong lam cham qua trinh dien tu dong. Buoc tru
+    //   lac quan nay CHI LAM GIAM _verifiedWallet.balance (khong bao gio
+    //   tang), nen khong the bi loi dung de "ve" them so du - muon TANG
+    //   so du bat buoc phai co token ky hop le tu Worker.
+    // - KHONG BAO GIO xoa/lam mat luot da dung khi thieu so du: neu Worker
+    //   bao khong du de tru het, phan CHUA TRU DUOC van duoc GIU LAI ben
+    //   Worker (cong don cho lan nap tiep theo) - tranh thiet hai cho khach.
+    // - Chi thuc su GOI WORKER khi gop du >= 100 luot (dung 1 lan goi cho
+    //   ca ngan luot, dung nhu yeu cau "khong tinh tung click cho nang
+    //   he thong"). Worker moi la noi TRU CHINH XAC va tra ve token moi.
+    // Bao cho Worker biet dang dung do bao nhieu luot (KHONG tru tien, chi
+    // GHI DE 1 con so de Admin xem duoc so uoc tinh gan-real-time thay vi
+    // phai doi du 100 luot). Dung DEBOUNCE (2 giay) - neu bam lien tuc nhieu
+    // "Thao tac nhanh" chi 1 request duoc gui sau khi ngung bam, tranh spam
+    // Worker ma van khong lam cham luong dien tu dong (khong cho ket qua).
+    var _heartbeatTimer = null;
+    function sendHeartbeat(liveClicks) {
+        clearTimeout(_heartbeatTimer);
+        _heartbeatTimer = setTimeout(function() {
+            var mid = getMachineId();
+            fetch(WALLET_API + '/heartbeat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mid: mid, liveClicks: liveClicks }),
+            }).catch(function() {}); // loi mang thi bo qua, khong anh huong tinh tien that
+        }, 2000);
+    }
+
+    function spendCredits(cost) {
+        var unsynced = getUnsyncedClicks() + cost;
+        setUnsyncedClicks(unsynced);
+        // Tru lac quan CHI de UI phan hoi nhanh - khong lam thay doi token
+        // da luu (token that van la ban ky boi Worker gan nhat).
+        _verifiedWallet.balance = Math.max(0, _verifiedWallet.balance - cost / 100);
+        sendHeartbeat(unsynced); // bao Worker de Admin xem duoc so uoc tinh gan-real-time
+
+        // Canh bao sap het Medi (khong chan thao tac, chi bao truoc)
+        var clickBudget = Math.round(_verifiedWallet.balance * 100);
+        if (clickBudget > 0 && clickBudget <= LOW_BALANCE_CLICKS) {
+            showToast('\u26a0\ufe0f S\u1eafp h\u1ebft Medi \u2014 c\u00f2n \u2248' + clickBudget +
+                ' l\u01b0\u1ee3t, n\u1ea1p th\u00eam \u0111\u1ec3 kh\u00f4ng b\u1ecb gi\u00e1n \u0111o\u1ea1n', 'warn');
+        } else if (clickBudget <= 0) {
+            showToast('\ud83d\udd34 \u0110\u00e3 h\u1ebft Medi \u2014 v\u00e0o V\u00ed Medi \u0111\u1ec3 n\u1ea1p th\u00eam', 'warn');
+        }
+
+        if (unsynced >= 100) {
+            var toSend = unsynced;
+            setUnsyncedClicks(0);
+            var mid = getMachineId();
+            fetch(WALLET_API + '/deduct', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mid: mid, clicks: toSend }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                verifyWalletToken(data.token, mid).then(function(payload) {
+                    if (payload) applyVerifiedToken(payload, data.token); // dong bo chinh xac tu Worker
+                });
+                if (data.insufficientBalance) {
+                    // Worker khong du de tru het - phan CHUA TRU van duoc GIU
+                    // LAI ben Worker (khong mat), chi bao cho khach biet de nap them.
+                    showToast('\u26a0\ufe0f V\u00ed kh\u00f4ng \u0111\u1ee7 Medi cho m\u1ed9t ph\u1ea7n l\u01b0\u1ee3t \u0111\u00e3 d\u00f9ng \u2014 ' +
+                        'ph\u1ea7n \u0111\u00f3 v\u1eabn \u0111\u01b0\u1ee3c gi\u1eef l\u1ea1i ch\u1edd b\u1ea1n n\u1ea1p th\u00eam, kh\u00f4ng b\u1ecb m\u1ea5t', 'warn');
+                }
+            })
+            .catch(function() {
+                // Loi mang: cong lai vao unsyncedClicks de thu lai o lan tru tiep theo,
+                // tranh mat luot da dung nhung chua kip bao Worker.
+                setUnsyncedClicks(getUnsyncedClicks() + toSend);
+            });
+        }
+    }
+
     // Dinh dang ngay theo DD-MM-YYYY (dung dau "-", KHONG dung "/" cua toLocaleDateString
-    // vi-VN) de hien thi han dung mot cach tuong minh, vd: "30-06-2026".
+    // vi-VN) - con dung cho vai cho hien thi khac trong script.
     function formatDDMMYYYY(date) {
         var d = String(date.getDate()).padStart(2, '0');
         var m = String(date.getMonth() + 1).padStart(2, '0');
@@ -2312,112 +2576,16 @@
         return d + '-' + m + '-' + y;
     }
 
-    // Doc license - uu tien GM storage (ben vung hon), fallback localStorage de tuong thich cu
-    function getLicense() {
-        try {
-            // Thu GM storage truoc (khong bi xoa khi clear localStorage/cache)
-            var gmVal = GM_getValue(LICENSE_KEY, null);
-            if (gmVal) return typeof gmVal === 'string' ? JSON.parse(gmVal) : gmVal;
-            // Fallback: doc tu localStorage (de migrate ban cu sang ban moi)
-            var raw = localStorage.getItem(LICENSE_KEY);
-            if (raw) {
-                var parsed = JSON.parse(raw);
-                // Tu dong migrate sang GM storage va xoa khoi localStorage
-                GM_setValue(LICENSE_KEY, parsed);
-                localStorage.removeItem(LICENSE_KEY);
-                return parsed;
-            }
-            return null;
-        } catch(e) { return null; }
-    }
-
-    // Luu license vao GM storage (khong bi xoa khi clear localStorage/cache)
-    function saveLicense(licenseCode, expiry, tier) {
-        try {
-            GM_setValue(LICENSE_KEY, {
-                code: licenseCode,
-                expiry: expiry,
-                tier: tier,
-                machineId: getMachineId(),
-            });
-        } catch(e) {}
-    }
-
-    // Cau truc ma: 3 ky tu dau la prefix tier, 5 ky tu sau la djb2
-    // Ca 3 loai ma deu CHI phu thuoc machineId (khong phu thuoc ngay/thang) -
-    // han dung duoc tinh tai THOI DIEM KICH HOAT, khong phai thoi diem tao ma:
-    // PRO + djb2( machineId + '|PROFULL|MTT2025' )    -> +30 ngay tu luc kich hoat (goi day du 490k/thang)
-    // TRI + djb2( machineId + '|TRIAL|MTT2025' )       -> +24 gio tu luc kich hoat (dung thu, 1 lan/may)
-    // BON + djb2( machineId + '|ADMINBONUS|MTT2025' )  -> +3 ngay tu luc kich hoat (CHI Admin cap, bu su co)
-    function verifyLicenseCode(code, machineId) {
-        var up = code.toUpperCase().replace(/\s/g, '');
-        var prefix = up.substring(0, 3);
-        var tierMap  = { PRO: 'pro', TRI: 'trial', BON: 'bonus' };
-        var saltMap  = { PRO: 'PROFULL', TRI: 'TRIAL', BON: 'ADMINBONUS' };
-        var durMs    = { PRO: 30 * 86400000, TRI: 24 * 3600000, BON: 3 * 86400000 };
-        if (!tierMap[prefix]) return false;
-
-        var expected = prefix + _djb2(machineId + '|' + saltMap[prefix] + '|MTT2025').substring(0, 5);
-        if (up !== expected) return false;
-
-        var expiry = new Date(Date.now() + durMs[prefix]).toISOString();
-        return { tier: tierMap[prefix], expiry: expiry };
-    }
-
-    // Lay tier hien tai ('pro' | 'trial' | 'bonus' | null)
-    // Chi kiem tra expiry - KHONG kiem tra machineId sau khi da kich hoat
-    // (machineId chi duoc kiem tra luc nhap ma lan dau, tranh hoi lai moi lan khoi dong)
-    function getLicenseTier() {
-        var lic = getLicense();
-        if (!lic) return null;
-        if (new Date(lic.expiry) <= new Date()) return null;
-        // Xac nhan lai sig bang cach kiem tra prefix
-        var up = (lic.code || '').toUpperCase();
-        var prefix = up.substring(0, 3);
-        var tierMap = { PRO: 'pro', TRI: 'trial', BON: 'bonus' };
-        return tierMap[prefix] || null;
-    }
-
-    // Kiem tra co hieu luc khong
-    function isLicenseValid() {
-        return getLicenseTier() !== null;
-    }
-
-    // So phut con lai (cho hien thi phut - it dung, giu de tuong thich)
-    function getMinutesLeft() {
-        var lic = getLicense();
-        if (!lic) return 0;
-        var diff = new Date(lic.expiry) - new Date();
-        return Math.max(0, Math.ceil(diff / 60000));
-    }
-
-    // So gio con lai (cho trial 24h)
-    function getHoursLeft() {
-        var lic = getLicense();
-        if (!lic) return 0;
-        var diff = new Date(lic.expiry) - new Date();
-        return Math.max(0, Math.ceil(diff / 3600000));
-    }
-
-    // So ngay con lai (cho cac ban khac)
-    function getDaysLeft() {
-        var lic = getLicense();
-        if (!lic) return 0;
-        var diff = new Date(lic.expiry) - new Date();
-        return Math.max(0, Math.ceil(diff / 86400000));
-    }
-
-    // Popup nhap license code (dung ca khi chua kich hoat lan khi het han)
+    // Popup Vi Medi (thay cho popup nhap ma license cu) - hien so du,
+    // nut dung thu, huong dan nap them. Dung chung cho ca truong hop
+    // chua kich hoat / het Medi (bam vao 1 muc Thao tac nhanh khi
+    // balance = 0 se mo popup nay).
     function showLicenseExpiredPopup(forceTitle) {
         var POPUP_ID = '_mtt_license_popup';
         if (document.getElementById(POPUP_ID)) return;
 
         var mid = getMachineId();
-        var lic = getLicense();
-        var isExp = lic && new Date(lic.expiry) <= new Date();
-        // forceTitle: dung cho truong hop ban Lite bam vao muc chi danh cho Pro
-        // (khac voi "het han"/"chua kich hoat" - nguoi dung DA co license hop le)
-        var isUpgrade = forceTitle === 'upgrade';
+        var cache = getWalletCache();
 
         var overlay = document.createElement('div');
         overlay.id = POPUP_ID;
@@ -2431,10 +2599,11 @@
 
         var card = document.createElement('div');
         Object.assign(card.style, {
-            background: '#fff', borderRadius: '18px',
-            padding: '30px 28px 26px', maxWidth: '390px', width: '92vw',
+            background: '#fff', borderRadius: '20px',
+            padding: '32px 32px 26px', maxWidth: '480px', width: '94vw',
+            maxHeight: '92vh', overflowY: 'auto',
             boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
-            textAlign: 'center', position: 'relative',
+            textAlign: 'center', position: 'relative', boxSizing: 'border-box',
         });
 
         // Nut dong
@@ -2448,54 +2617,235 @@
         closeX.onclick = function() { overlay.remove(); };
         card.appendChild(closeX);
 
-        // Icon
+        // Icon + tieu de
         var iconEl = document.createElement('div');
-        iconEl.textContent = isUpgrade ? '\u2b50' : (isExp ? '\ud83d\udd12' : '\ud83d\udd11');
+        iconEl.textContent = '\ud83d\udcb0';
         Object.assign(iconEl.style, { fontSize: '44px', marginBottom: '10px' });
         card.appendChild(iconEl);
 
-        // Tieu de
         var titleEl = document.createElement('div');
-        titleEl.textContent = isUpgrade
-            ? 'Ch\u1ec9 d\u00e0nh cho b\u1ea3n Pro'
-            : (isExp ? 'License \u0111\u00e3 h\u1ebft h\u1ea1n' : 'Ch\u01b0a k\u00edch ho\u1ea1t');
+        titleEl.textContent = 'V\u00ed Medi';
         Object.assign(titleEl.style, {
-            fontSize: '20px', fontWeight: '800',
-            color: isUpgrade ? '#6a1b9a' : (isExp ? '#c62828' : '#e65100'),
-            marginBottom: '6px',
+            fontSize: '24px', fontWeight: '800', color: '#0d47a1', marginBottom: '4px',
         });
         card.appendChild(titleEl);
 
-        // Huong dan lien he
-        var subMsg = document.createElement('div');
-        subMsg.innerHTML = (isUpgrade
-                ? 'T\u00ednh n\u0103ng n\u00e0y ch\u1ec9 d\u00e0nh cho b\u1ea3n <b>Pro</b>. ' : '') +
-            'Vui l\u00f2ng li\u00ean h\u1ec7 t\u00e1c gi\u1ea3 \u0111\u1ec3 \u0111\u01b0\u1ee3c c\u1ea5p m\u00e3:<br>' +
-            '<a href="https://zalo.me/0868919790" target="_blank" rel="noopener" ' +
-            'style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;' +
-            'font-size:17px;font-weight:700;color:#1565c0">' +
-            '<img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" ' +
-            'alt="Zalo" style="width:20px;height:20px;vertical-align:middle">' +
-            '<span>0868.91.97.90</span></a>';
-        Object.assign(subMsg.style, {
-            fontSize: '14px', color: '#666', lineHeight: '2', marginBottom: '18px',
+        // O so du lon, ro rang
+        var balanceBox = document.createElement('div');
+        balanceBox.id = '_mtt_balance_box';
+        Object.assign(balanceBox.style, {
+            background: cache.balance > 0 ? '#e8f5e9' : '#fff3e0',
+            border: '1.5px solid ' + (cache.balance > 0 ? '#a5d6a7' : '#ffcc80'),
+            borderRadius: '14px', padding: '18px', margin: '14px 0 6px',
         });
-        card.appendChild(subMsg);
+        balanceBox.innerHTML =
+            '<div style="font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">S\u1ed1 d\u01b0 hi\u1ec7n t\u1ea1i</div>' +
+            '<div id="_mtt_balance_num" style="font-size:40px;font-weight:900;color:' + (cache.balance > 0 ? '#2e7d32' : '#e65100') + '">' +
+            cache.balance + ' <span style="font-size:19px;font-weight:700">Medi</span></div>' +
+            '<div id="_mtt_balance_sub" style="font-size:14px;color:#999;margin-top:4px">\u2248 ' + Math.round(cache.balance * 100) + ' l\u01b0\u1ee3t autofill/autoclick c\u00f2n l\u1ea1i</div>';
+        card.appendChild(balanceBox);
 
-        // O hien thi + copy Machine ID
+        // Cap nhat DONG BO ca so, dong chu "luot con lai" va mau nen hop -
+        // dung chung cho ca 3 noi goi (dung thu / lam moi / mo popup) de
+        // tranh bug chi cap nhat rieng le tung phan nhu truoc.
+        function updateBalanceDisplay(balance) {
+            var numEl = document.getElementById('_mtt_balance_num');
+            var subEl = document.getElementById('_mtt_balance_sub');
+            var boxEl = document.getElementById('_mtt_balance_box');
+            if (numEl) numEl.innerHTML = balance + ' <span style="font-size:19px;font-weight:700">Medi</span>';
+            if (subEl) subEl.textContent = '\u2248 ' + Math.round(balance * 100) + ' l\u01b0\u1ee3t autofill/autoclick c\u00f2n l\u1ea1i';
+            if (numEl) numEl.style.color = balance > 0 ? '#2e7d32' : '#e65100';
+            if (boxEl) {
+                boxEl.style.background = balance > 0 ? '#e8f5e9' : '#fff3e0';
+                boxEl.style.border = '1.5px solid ' + (balance > 0 ? '#a5d6a7' : '#ffcc80');
+            }
+        }
+
+        var refreshBtn = document.createElement('button');
+        refreshBtn.textContent = '\ud83d\udd04 L\u00e0m m\u1edbi s\u1ed1 d\u01b0';
+        Object.assign(refreshBtn.style, {
+            border: 'none', background: 'none', color: '#1565c0',
+            fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+            marginBottom: '16px', padding: '6px',
+        });
+        refreshBtn.onclick = function() {
+            refreshBtn.textContent = '\u23f3 \u0110ang t\u1ea3i...';
+            refreshWalletBalance(function(ok, c) {
+                updateBalanceDisplay(c.balance);
+                refreshBtn.textContent = ok ? '\u2705 \u0110\u00e3 c\u1eadp nh\u1eadt' : '\u26a0\ufe0f L\u1ed7i m\u1ea1ng, th\u1eed l\u1ea1i';
+                setTimeout(function() { refreshBtn.textContent = '\ud83d\udd04 L\u00e0m m\u1edbi s\u1ed1 d\u01b0'; }, 1800);
+            });
+        };
+        card.appendChild(refreshBtn);
+
+        // Nut dung thu (chi hien neu chua dung, tu Worker bao ve chinh)
+        if (!cache.trialUsed) {
+            var trialBtn = document.createElement('button');
+            trialBtn.textContent = '\u23f3 D\u00f9ng th\u1eed +5 Medi (mi\u1ec5n ph\u00ed, 1 l\u1ea7n/m\u00e1y)';
+            Object.assign(trialBtn.style, {
+                width: '100%', padding: '15px', border: 'none', borderRadius: '12px',
+                background: '#e65100', color: '#fff', fontSize: '16px', fontWeight: '800',
+                cursor: 'pointer', marginBottom: '14px',
+            });
+            trialBtn.onclick = function() {
+                trialBtn.disabled = true;
+                trialBtn.textContent = '\u23f3 \u0110ang k\u00edch ho\u1ea1t...';
+                activateTrial(function(ok, result) {
+                    if (ok) {
+                        trialBtn.textContent = '\ud83c\udf89 \u0110\u00e3 nh\u1eadn +5 Medi!';
+                        updateBalanceDisplay(result);
+                        setTimeout(function() { trialBtn.remove(); }, 1400);
+                    } else {
+                        trialBtn.disabled = false;
+                        trialBtn.textContent = result === 'da_dung_thu'
+                            ? '\u26a0\ufe0f M\u00e1y n\u00e0y \u0111\u00e3 d\u00f9ng th\u1eed r\u1ed3i'
+                            : '\u26a0\ufe0f L\u1ed7i m\u1ea1ng, th\u1eed l\u1ea1i';
+                    }
+                });
+            };
+            card.appendChild(trialBtn);
+        }
+
+        // Duong ke
+        var divEl = document.createElement('div');
+        Object.assign(divEl.style, { height: '1px', background: '#eee', margin: '4px 0 16px' });
+        card.appendChild(divEl);
+
+        // Huong dan nap them
+        var topupMsg = document.createElement('div');
+        topupMsg.innerHTML =
+            '<div style="font-size:15px;color:#555;font-weight:700;margin-bottom:8px;text-align:left">N\u1ea1p th\u00eam Medi</div>' +
+            '<div style="font-size:14px;color:#777;text-align:left;line-height:1.8">' +
+            '\u2022 1.000\u0111 = 1 Medi = 100 l\u01b0\u1ee3t<br>' +
+            '\u2022 T\u1ed1i thi\u1ec3u 100.000\u0111 (10 Medi)<br>' +
+            '\u2022 T\u1eb7ng 5% khi n\u1ea1p \u2265 500.000\u0111, t\u1eb7ng 10% khi n\u1ea1p \u2265 1.000.000\u0111, t\u1eb7ng 15% khi n\u1ea1p \u2265 2.000.000\u0111' +
+            '</div>';
+        Object.assign(topupMsg.style, { marginBottom: '14px' });
+        card.appendChild(topupMsg);
+
+        // O hien thi + copy Machine ID (gui kem khi chuyen khoan)
         var midBox = document.createElement('div');
         Object.assign(midBox.style, {
             background: '#f5f7fa', borderRadius: '10px',
-            padding: '10px 14px', marginBottom: '16px',
+            padding: '12px 16px', marginBottom: '16px',
             textAlign: 'left', border: '1px solid #e0e4ea',
         });
         midBox.innerHTML =
-            '<div style="font-size:11px;color:#999;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">M\u00e3 m\u00e1y c\u1ee7a b\u1ea1n</div>' +
+            '<div style="font-size:12.5px;color:#999;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">M\u00e3 m\u00e1y c\u1ee7a b\u1ea1n (ghi v\u00e0o n\u1ed9i dung CK)</div>' +
             '<div style="display:flex;align-items:center;gap:8px">' +
-            '<b style="font-size:15px;color:#1565c0;letter-spacing:1px;flex:1">' + mid + '</b>' +
-            '<button id="_mtt_copy_mid" style="padding:5px 10px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap">\ud83d\udccb Sao ch\u00e9p</button>' +
+            '<b style="font-size:19px;color:#1565c0;letter-spacing:1px;flex:1">' + mid + '</b>' +
+            '<button id="_mtt_copy_mid" style="padding:7px 12px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap">\ud83d\udccb Sao ch\u00e9p</button>' +
             '</div>';
         card.appendChild(midBox);
+
+        // O hien thi thong tin STK VA de khach TU CHUYEN KHOAN, he thong se
+        // tu dong cong Medi trong vai giay - vai phut (khong can nhan Zalo
+        // cho Admin nua). Doi BANK_NAME/VA_NUMBER/VA_HOLDER neu doi ngan
+        // hang/tai khoan sau nay.
+        var BANK_NAME = 'BIDV';
+        var VA_NUMBER = '96247MEDINET';
+        var VA_HOLDER = 'DOAN HOANG ANH';
+        var vaBox = document.createElement('div');
+        Object.assign(vaBox.style, {
+            background: '#e8f5e9', borderRadius: '10px',
+            padding: '12px 16px', marginBottom: '10px',
+            textAlign: 'left', border: '1px solid #a5d6a7',
+        });
+        vaBox.innerHTML =
+            '<div style="font-size:12.5px;color:#2e7d32;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Chuy\u1ec3n kho\u1ea3n v\u00e0o (t\u1ef1 \u0111\u1ed9ng c\u1ed9ng Medi)</div>' +
+            '<div style="font-size:14px;color:#555;margin-bottom:4px">Ng\u00e2n h\u00e0ng: <b>' + BANK_NAME + '</b></div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+            '<div style="font-size:14px;color:#555">S\u1ed1 TK: <b style="font-size:17px;color:#2e7d32;letter-spacing:.5px">' + VA_NUMBER + '</b></div>' +
+            '<button id="_mtt_copy_va" style="padding:6px 11px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-size:12.5px;cursor:pointer;font-weight:600;white-space:nowrap;margin-left:auto">\ud83d\udccb Sao ch\u00e9p</button>' +
+            '</div>' +
+            '<div style="font-size:14px;color:#555">Ch\u1ee7 TK: ' + VA_HOLDER + '</div>' +
+            '<div style="font-size:13px;color:#e65100;margin-top:8px;line-height:1.6">\u26a0\ufe0f N\u1ed9i dung CK PH\u1ea2I ghi \u0111\u00fang M\u00e3 m\u00e1y ' + mid + ' \u1edf tr\u00ean, n\u1ebfu kh\u00f4ng h\u1ec7 th\u1ed1ng kh\u00f4ng nh\u1eadn di\u1ec7n \u0111\u01b0\u1ee3c.</div>';
+        card.appendChild(vaBox);
+
+        // Chip chon muc tien + QR VietQR, tu dong dien dung Ma may (mid) va
+        // so tien da chon vao noi dung CK - khach chi can quet QR bang app
+        // ngan hang, khong can go tay so TK / noi dung nua.
+        var qrChipsBox = document.createElement('div');
+        Object.assign(qrChipsBox.style, {
+            display: 'flex', gap: '6px', flexWrap: 'wrap',
+            marginBottom: '12px', justifyContent: 'center',
+        });
+        var QR_AMOUNTS = [
+            { amt: 100000, label: '100k' },
+            { amt: 500000, label: '500k' },
+            { amt: 1000000, label: '1tr' },
+            { amt: 2000000, label: '2tr' },
+        ];
+        var qrImgEl = document.createElement('img');
+        var currentQrAmt = 100000;
+        function renderQrImg() {
+            qrImgEl.src = 'https://img.vietqr.io/image/' + BANK_NAME + '-' + VA_NUMBER +
+                '-compact2.png?amount=' + currentQrAmt + '&addInfo=' + encodeURIComponent(mid);
+        }
+        QR_AMOUNTS.forEach(function(opt, idx) {
+            var chip = document.createElement('button');
+            chip.type = 'button';
+            chip.textContent = opt.label;
+            chip.dataset.amt = opt.amt;
+            var isActive = idx === 0;
+            Object.assign(chip.style, {
+                padding: '7px 14px', borderRadius: '999px', cursor: 'pointer',
+                fontSize: '13px', fontWeight: '700',
+                border: '1.5px solid ' + (isActive ? '#2e7d32' : '#c8e0cb'),
+                background: isActive ? '#2e7d32' : '#fff',
+                color: isActive ? '#fff' : '#2e7d32',
+            });
+            chip.addEventListener('click', function() {
+                Array.prototype.forEach.call(qrChipsBox.children, function(c) {
+                    c.style.background = '#fff';
+                    c.style.color = '#2e7d32';
+                    c.style.borderColor = '#c8e0cb';
+                });
+                chip.style.background = '#2e7d32';
+                chip.style.color = '#fff';
+                chip.style.borderColor = '#2e7d32';
+                currentQrAmt = parseInt(chip.dataset.amt, 10);
+                renderQrImg();
+            });
+            qrChipsBox.appendChild(chip);
+        });
+        card.appendChild(qrChipsBox);
+
+        var qrBox = document.createElement('div');
+        Object.assign(qrBox.style, {
+            background: '#fff', border: '1.5px solid #a5d6a7', borderRadius: '12px',
+            padding: '14px', marginBottom: '10px', textAlign: 'center',
+        });
+        Object.assign(qrImgEl.style, {
+            width: '190px', height: '190px', borderRadius: '8px', display: 'block', margin: '0 auto',
+        });
+        qrImgEl.alt = 'QR chuy\u1ec3n kho\u1ea3n';
+        renderQrImg();
+        qrBox.appendChild(qrImgEl);
+        var qrNote = document.createElement('div');
+        qrNote.textContent = '\ud83d\udcf1 M\u1edf app ng\u00e2n h\u00e0ng \u2192 qu\u00e9t m\u00e3 n\u00e0y \u2014 s\u1ed1 ti\u1ec1n & n\u1ed9i dung Ma m\u00e1y \u0111\u01b0\u1ee3c \u0111i\u1ec1n s\u1eb5n, kh\u00f4ng c\u1ea7n g\u00f5 tay';
+        Object.assign(qrNote.style, {
+            fontSize: '12.5px', color: '#2e7d32', marginTop: '10px', lineHeight: '1.6', fontWeight: '600',
+        });
+        qrBox.appendChild(qrNote);
+        card.appendChild(qrBox);
+
+        setTimeout(function() {
+            var copyVaBtn = document.getElementById('_mtt_copy_va');
+            if (copyVaBtn) {
+                copyVaBtn.addEventListener('click', function() {
+                    try { GM_setClipboard(VA_NUMBER); } catch(e) {
+                        try {
+                            var ta2 = document.createElement('textarea');
+                            ta2.value = VA_NUMBER; document.body.appendChild(ta2);
+                            ta2.select(); document.execCommand('copy'); document.body.removeChild(ta2);
+                        } catch(e2) {}
+                    }
+                    copyVaBtn.textContent = '\u2705 \u0110\u00e3 sao!';
+                    setTimeout(function() { copyVaBtn.textContent = '\ud83d\udccb Sao ch\u00e9p'; }, 1800);
+                });
+            }
+        }, 50);
 
         setTimeout(function() {
             var copyMidBtn = document.getElementById('_mtt_copy_mid');
@@ -2513,98 +2863,31 @@
             });
         }, 50);
 
-        // Duong ke
-        var divEl = document.createElement('div');
-        Object.assign(divEl.style, { height: '1px', background: '#eee', marginBottom: '16px' });
-        card.appendChild(divEl);
-
-        // Nhap ma license
-        var codeLabel = document.createElement('div');
-        codeLabel.textContent = 'Nh\u1eadp m\u00e3 license \u0111\u01b0\u1ee3c c\u1ea5p:';
-        Object.assign(codeLabel.style, {
-            fontSize: '13px', color: '#555', marginBottom: '8px',
-            textAlign: 'left', fontWeight: '600',
+        // Nut nap Medi qua Zalo
+        var zaloBtn = document.createElement('a');
+        zaloBtn.href = 'https://zalo.me/0868919790';
+        zaloBtn.target = '_blank';
+        zaloBtn.rel = 'noopener';
+        zaloBtn.innerHTML =
+            '<img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" ' +
+            'alt="Zalo" style="width:18px;height:18px;vertical-align:middle;margin-right:7px">' +
+            'Nh\u1eafn Zalo 0868.91.97.90 (h\u1ed7 tr\u1ee3 n\u1ebfu chuy\u1ec3n kho\u1ea3n b\u1ecb l\u1ed7i)';
+        Object.assign(zaloBtn.style, {
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '100%', padding: '13px', borderRadius: '12px',
+            background: '#78909c', color: '#fff', fontSize: '14px', fontWeight: '700',
+            textDecoration: 'none', boxSizing: 'border-box',
         });
-        card.appendChild(codeLabel);
-
-        var codeInput = document.createElement('input');
-        codeInput.type = 'text';
-        codeInput.placeholder = 'VD: A1B2C3D4';
-        codeInput.maxLength = 20;
-        Object.assign(codeInput.style, {
-            width: '100%', padding: '11px 14px', border: '2px solid #ddd',
-            borderRadius: '10px', fontSize: '16px', outline: 'none',
-            textAlign: 'center', letterSpacing: '2px', fontWeight: '700',
-            textTransform: 'uppercase', boxSizing: 'border-box', marginBottom: '6px',
-        });
-        codeInput.addEventListener('focus', function() { codeInput.style.borderColor = '#1565c0'; });
-        codeInput.addEventListener('blur',  function() { codeInput.style.borderColor = '#ddd'; });
-        codeInput.addEventListener('input', function() { codeInput.value = codeInput.value.toUpperCase(); });
-        card.appendChild(codeInput);
-
-        var errEl = document.createElement('div');
-        errEl.textContent = '';
-        Object.assign(errEl.style, {
-            fontSize: '13px', color: '#c62828', minHeight: '20px',
-            marginBottom: '10px', textAlign: 'left',
-        });
-        card.appendChild(errEl);
-
-        // Nut kich hoat
-        var activateBtn = document.createElement('button');
-        activateBtn.textContent = '\u2705 K\u00edch ho\u1ea1t';
-        Object.assign(activateBtn.style, {
-            width: '100%', padding: '13px',
-            background: 'linear-gradient(135deg,#1565c0,#0d47a1)',
-            color: '#fff', border: 'none', borderRadius: '12px',
-            fontSize: '16px', fontWeight: '800', cursor: 'pointer',
-        });
-        activateBtn.addEventListener('click', function() {
-            var code = codeInput.value.trim().toUpperCase().replace(/\s/g,'');
-            if (!code) { errEl.textContent = '\u26a0\ufe0f Vui l\u00f2ng nh\u1eadp m\u00e3!'; return; }
-            var result = verifyLicenseCode(code, mid);
-            if (result) {
-                saveLicense(code, result.expiry, result.tier);
-                var tierLabels = {
-                    pro: '\ud83d\udc51 Full 30 ng\u00e0y',
-                    trial: '\u23f3 D\u00f9ng th\u1eed 24h',
-                    bonus: '\ud83d\udee0\ufe0f B\u00f9 s\u1ef1 c\u1ed1 3 ng\u00e0y',
-                };
-                var tierColors = {
-                    pro: '#0d47a1', trial: '#e65100', bonus: '#6a1b9a',
-                };
-                var tierLabel = tierLabels[result.tier] || result.tier;
-                var expDate = new Date(result.expiry);
-                var expStr;
-                if (result.tier === 'trial') {
-                    // Trial +24h: hien ca ngay-gio het han cho ro rang
-                    expStr = 'H\u1ebft l\u00fac ' +
-                        expDate.toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'}) +
-                        ' ng\u00e0y ' + formatDDMMYYYY(expDate);
-                } else {
-                    // PRO/BON: het han dung bang expiry, hien nguyen ngay-gio kich hoat +N
-                    expStr = '\u0110\u1ebfn ' + formatDDMMYYYY(expDate) +
-                        ' (' + expDate.toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'}) + ')';
-                }
-                activateBtn.textContent = '\ud83c\udf89 K\u00edch ho\u1ea1t th\u00e0nh c\u00f4ng!';
-                activateBtn.style.background = tierColors[result.tier] || '#1565c0';
-                setTimeout(function() {
-                    overlay.remove();
-                    showToast('\ud83d\udd11 ' + tierLabel + ' \u2014 h\u1ea1n d\u00f9ng: ' + expStr);
-                }, 1000);
-            } else {
-                errEl.textContent = '\u274c M\u00e3 kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c sai m\u00e1y!';
-                codeInput.style.borderColor = '#c62828';
-                setTimeout(function() { codeInput.style.borderColor = '#ddd'; errEl.textContent = ''; }, 2500);
-            }
-        });
-        codeInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') activateBtn.click(); });
-        card.appendChild(activateBtn);
+        card.appendChild(zaloBtn);
 
         overlay.appendChild(card);
         overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
         document.body.appendChild(overlay);
-        setTimeout(function() { codeInput.focus(); }, 100);
+
+        // Tu dong lam moi so du 1 lan khi mo popup, cho chinh xac hon cache cu
+        refreshWalletBalance(function(ok, c) {
+            updateBalanceDisplay(c.balance);
+        });
     }
 
     // ================================================================
@@ -3025,10 +3308,13 @@
                 var card = document.createElement('div');
                 Object.assign(card.style, {
                     background: 'linear-gradient(145deg,#0d47a1 0%,#1565c0 50%,#0d47a1 100%)',
-                    borderRadius: '18px',
-                    padding: '32px 28px 24px',
-                    maxWidth: '380px',
-                    width: '90vw',
+                    borderRadius: '20px',
+                    padding: '36px 32px 28px',
+                    maxWidth: '460px',
+                    width: '94vw',
+                    maxHeight: '92vh',
+                    overflowY: 'auto',
+                    boxSizing: 'border-box',
                     boxShadow: '0 25px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.1)',
                     color: '#fff',
                     textAlign: 'center',
@@ -3055,9 +3341,9 @@
                 card.appendChild(icon);
                 // Name
                 var name = document.createElement('div');
-                name.textContent = 'Ho\u00e0ng Anh Jupiter';
+                name.textContent = 'Medinet AutoFill';
                 Object.assign(name.style, {
-                    fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px',
+                    fontSize: '26px', fontWeight: '700', letterSpacing: '0.5px',
                     marginBottom: '4px',
                     color: '#ffffff',
                 });
@@ -3070,54 +3356,51 @@
                 });
                 card.appendChild(div1);
                 // Contact
-                var contact = document.createElement('div');
-                contact.innerHTML = '\ud83d\udce7 <a href="mailto:bsdha.btu@gmail.com" style="color:#a5b4fc;text-decoration:none;font-weight:600;">bsdha.btu@gmail.com</a>';
-                Object.assign(contact.style, { fontSize: '14px', marginBottom: '10px' });
+                var contact = document.createElement('a');
+                contact.href = 'https://zalo.me/0868919790';
+                contact.target = '_blank';
+                contact.rel = 'noopener';
+                contact.innerHTML =
+                    '<img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" ' +
+                    'alt="Zalo" style="width:18px;height:18px;vertical-align:middle;margin-right:7px">' +
+                    'Zalo 0868.91.97.90';
+                Object.assign(contact.style, {
+                    fontSize: '15px', marginBottom: '10px', color: '#a5b4fc',
+                    textDecoration: 'none', fontWeight: '600', display: 'inline-flex', alignItems: 'center',
+                });
                 card.appendChild(contact);
                 // Copyright
                 var copy = document.createElement('div');
-                copy.textContent = 'Copyright \u00a9 Hoang Anh Jupiter. All rights reserved';
+                copy.textContent = 'Copyright \u00a9 Medinet AutoFill. All rights reserved';
                 Object.assign(copy.style, {
-                    fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px',
+                    fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px',
                 });
                 card.appendChild(copy);
 
-                // License info
+                // Vi Medi info
                 var licInfoBox = document.createElement('div');
                 Object.assign(licInfoBox.style, {
-                    background: 'rgba(255,255,255,0.1)', borderRadius: '10px',
-                    padding: '12px 14px', marginBottom: '16px', textAlign: 'left',
+                    background: 'rgba(255,255,255,0.1)', borderRadius: '12px',
+                    padding: '14px 16px', marginBottom: '16px', textAlign: 'left',
                 });
-                var tier = getLicenseTier();
-                var daysLeft = getDaysLeft();
-                var hoursLeft = getHoursLeft();
-                var tierBadgeMap = {
-                    pro: ' \ud83d\udc51 Full',
-                    trial: ' \u23f3 D\u00f9ng th\u1eed',
-                    bonus: ' \ud83d\udee0\ufe0f B\u00f9 s\u1ef1 c\u1ed1',
-                };
-                var tierBadge = tier ? (tierBadgeMap[tier] || '') : '';
-                // Trial (24h) hien theo gio cho de hinh dung; Pro/Bonus hien theo ngay
-                var timeStr = (tier === 'trial')
-                    ? (hoursLeft + ' gi\u1edd')
-                    : (daysLeft + ' ng\u00e0y');
-                var licStatus = tier
-                    ? ('\ud83d\udfe2 \u0110\u00e3 k\u00edch ho\u1ea1t' + tierBadge + ' \u2014 c\u00f2n <b>' + timeStr + '</b>')
-                    : '\ud83d\udd34 Ch\u01b0a k\u00edch ho\u1ea1t / \u0110\u00e3 h\u1ebft h\u1ea1n';
+                var walletC = getWalletCache();
+                var licStatus = walletC.balance > 0
+                    ? ('\ud83d\udfe2 C\u00f2n <b>' + walletC.balance + ' Medi</b> (\u2248' + (walletC.balance * 100) + ' l\u01b0\u1ee3t)')
+                    : '\ud83d\udd34 H\u1ebft Medi / Ch\u01b0a k\u00edch ho\u1ea1t';
                 licInfoBox.innerHTML =
-                    '<div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:6px">\ud83d\udd11 <b>License</b></div>' +
-                    '<div style="font-size:14px;color:#fff;margin-bottom:6px">' + licStatus + '</div>' +
-                    '<div style="font-size:11px;color:rgba(255,255,255,0.5);word-break:break-all">M\u00e3 m\u00e1y: ' + getMachineId() + '</div>';
+                    '<div style="font-size:15px;color:rgba(255,255,255,0.7);margin-bottom:8px">\ud83d\udcb0 <b>V\u00ed Medi</b></div>' +
+                    '<div style="font-size:17px;color:#fff;margin-bottom:8px">' + licStatus + '</div>' +
+                    '<div style="font-size:13px;color:rgba(255,255,255,0.5);word-break:break-all">M\u00e3 m\u00e1y: ' + getMachineId() + '</div>';
                 card.appendChild(licInfoBox);
 
                 // Button gia han
                 var licBtn = document.createElement('button');
-                licBtn.textContent = '\ud83d\udd11 Qu\u1ea3n l\u00fd License';
+                licBtn.textContent = '\ud83d\udcb0 Qu\u1ea3n l\u00fd V\u00ed Medi';
                 Object.assign(licBtn.style, {
-                    display: 'block', width: '100%', padding: '10px',
+                    display: 'block', width: '100%', padding: '13px',
                     background: 'rgba(255,255,255,0.15)', color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px',
-                    fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginBottom: '16px',
+                    border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px',
+                    fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '16px',
                 });
                 licBtn.addEventListener('click', function() {
                     // Dong popup nay, mo popup license
@@ -3167,9 +3450,10 @@
             '._mtt_item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;' +
             'border-width:1.5px;border-style:solid;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;' +
             'text-align:left;background:#fff;transition:opacity 0.2s,transform 0.1s;}' +
-            '._mtt_item:not([data-unavailable]):hover{opacity:0.78;transform:translateX(2px);}' +
-            '._mtt_item:active:not([data-unavailable]){transform:scale(0.97);}' +
+            '._mtt_item:not([data-unavailable]):not([data-nocredit]):hover{opacity:0.78;transform:translateX(2px);}' +
+            '._mtt_item:active:not([data-unavailable]):not([data-nocredit]){transform:scale(0.97);}' +
             '._mtt_item[data-unavailable]{opacity:0.32;cursor:not-allowed;filter:grayscale(0.5);}' +
+            '._mtt_item[data-nocredit]{opacity:0.5;filter:grayscale(0.3);}' +
             '._mtt_sep{display:none;}' +
             '._mtt_toggle_row{display:flex;align-items:center;justify-content:space-between;width:100%;' +
             'padding:9px 12px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;' +
@@ -3233,8 +3517,14 @@
                     openSubmenu(item, action.flyoutItems, action.noAgeLogic);
                     return;
                 }
+                if (!isLicenseValid()) {
+                    menu.style.display = 'none';
+                    showLicenseExpiredPopup();
+                    return;
+                }
                 menu.style.display = 'none';
                 action.fn();
+                spendCredits(action.creditCost || DEFAULT_ACTION_COST);
             });
             menu.appendChild(item);
         });
@@ -3312,10 +3602,9 @@
             if (toggleText) toggleText.textContent = scriptEnabled ? 'B\u1eadt' : 'T\u1eaft';
         }
 
-        var tier = getLicenseTier();
-        // Chi con 1 goi tinh nang duy nhat: bat ky license hop le nao
-        // (trial 24h / pro 30 ngay / bonus 3 ngay danh cho Admin) deu
-        // thay DAY DU cac muc, khong con phan biet "lite" nua.
+        // Con Medi hay khong (bat ky > 0 la du dieu kien dung DAY DU tinh nang,
+        // khong con phan biet goi "lite" nua).
+        var hasCredits = isLicenseValid();
         var visibleCount = 0;
         menu.querySelectorAll('._mtt_item').forEach(function(item) {
             var idx = parseInt(item.dataset.actionIdx, 10);
@@ -3339,8 +3628,14 @@
                 item.title = 'Script đang TẮT - bật lên ở đầu menu để sử dụng';
                 return;
             }
-            item.removeAttribute('data-unavailable');
-            item.title = '';
+            // Het Medi -> van hien nhung lam mo, dung attribute RIENG (data-nocredit)
+            // de o click handler biet mo popup Vi Medi thay vi chan im lang.
+            if (!hasCredits) {
+                item.setAttribute('data-nocredit', '1');
+                item.title = 'H\u1ebft Medi - bam \u0111\u1ec3 n\u1ea1p th\u00eam';
+            } else {
+                item.removeAttribute('data-nocredit');
+            }
         });
 
         // Khong co muc nao kha dung tren trang hien tai -> hien thong bao
@@ -3387,6 +3682,8 @@
     // ================================================================
 
     injectStyle();
+    initWalletFromCache(); // nap + xac thuc token da luu tu lan truoc, dong thoi lay ban moi nhat tu Worker chay ngam
+    refreshWalletBalance();
     var _injectedContainers = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
 
     function buildWrapper() {
