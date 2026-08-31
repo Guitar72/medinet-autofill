@@ -2190,6 +2190,36 @@
     //  chu ky se KHONG con khop -> script tu dong coi nhu KHONG HOP LE,
     //  balance hieu luc = 0, bat buoc phai lay token that tu Worker.
     // ================================================================
+    // ================================================================
+    //  MA BI MAT THIET BI (device secret) - KHAC voi Ma may (mid): mid
+    //  duoc PHEP hien thi cong khai (de ghi noi dung chuyen khoan), con
+    //  chuoi nay KHONG BAO GIO hien ra man hinh, tu sinh ngau nhien 1
+    //  lan duy nhat va gui kem moi request tru tien/heartbeat/dung thu -
+    //  la bang chung "day dung la script that dang chay tren dung may
+    //  da tao vi nay", chan viec ai do biet duoc mid (vd nhin thay trong
+    //  anh chup man hinh) roi tu goi thang API de tru/pha vi cua ho.
+    // ================================================================
+    var DEVICE_SECRET_KEY = '_mtt_device_secret_v1';
+    var _deviceSecret = null;
+    function getDeviceSecret() {
+        if (_deviceSecret) return _deviceSecret;
+        try {
+            var saved = GM_getValue(DEVICE_SECRET_KEY, null);
+            if (saved && typeof saved === 'string' && saved.length >= 32) {
+                _deviceSecret = saved;
+                return _deviceSecret;
+            }
+        } catch (e) {}
+        var bytes = new Uint8Array(24);
+        crypto.getRandomValues(bytes);
+        var hex = Array.prototype.map.call(bytes, function(b) {
+            return b.toString(16).padStart(2, '0');
+        }).join('');
+        try { GM_setValue(DEVICE_SECRET_KEY, hex); } catch (e) {}
+        _deviceSecret = hex;
+        return _deviceSecret;
+    }
+
     var WALLET_PUBLIC_JWK = {
         kty: 'EC', crv: 'P-256',
         x: 'l6Z_atNLQ_jvgC3uk6J3hqAJy7FgvH4qVT0qkpRLuQ0',
@@ -2469,7 +2499,7 @@
     function activateTrial(onDone) {
         var mid = getMachineId();
         fetch(WALLET_API + '/trial', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Secret': getDeviceSecret() },
             body: JSON.stringify({ mid: mid }),
         })
         .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
@@ -2481,8 +2511,11 @@
                     onDone(true, payload.balance);
                 });
             } else {
-                onDone(false, res.data && res.data.error === 'trial_already_used'
-                    ? 'da_dung_thu' : 'loi');
+                var reason = 'loi';
+                if (res.data && res.data.error === 'trial_already_used') reason = 'da_dung_thu';
+                else if (res.data && res.data.error === 'trial_limit_ip') reason = 'gioi_han_ip';
+                else if (res.data && res.data.error === 'device_mismatch') reason = 'sai_thiet_bi';
+                onDone(false, reason);
             }
         })
         .catch(function() { onDone(false, 'network'); });
@@ -2516,7 +2549,7 @@
         _heartbeatTimer = setTimeout(function() {
             var mid = getMachineId();
             fetch(WALLET_API + '/heartbeat', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Secret': getDeviceSecret() },
                 body: JSON.stringify({ mid: mid, liveClicks: liveClicks }),
             }).catch(function() {}); // loi mang thi bo qua, khong anh huong tinh tien that
         }, 2000);
@@ -2544,11 +2577,21 @@
             setUnsyncedClicks(0);
             var mid = getMachineId();
             fetch(WALLET_API + '/deduct', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Secret': getDeviceSecret() },
                 body: JSON.stringify({ mid: mid, clicks: toSend }),
             })
             .then(function(r) { return r.json(); })
             .then(function(data) {
+                if (data.error === 'device_mismatch') {
+                    // Vi nay da bi gan voi 1 "thiet bi" khac (hiem gap - vd
+                    // trinh duyet bi xoa sach du lieu, hoac co nghi van bat
+                    // thuong) - khong tu y thu lai, bao khach lien he ho tro
+                    // de Admin go khoa thiet bi (khong lam mat luot da dung,
+                    // Worker van giu nguyen o pending_clicks).
+                    showToast('\u26a0\ufe0f Kh\u00f4ng x\u00e1c nh\u1eadn \u0111\u01b0\u1ee3c thi\u1ebft b\u1ecb cho v\u00ed n\u00e0y \u2014 ' +
+                        'nh\u1eafn Zalo 0868.91.97.90 \u0111\u1ec3 \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3', 'warn');
+                    return;
+                }
                 verifyWalletToken(data.token, mid).then(function(payload) {
                     if (payload) applyVerifiedToken(payload, data.token); // dong bo chinh xac tu Worker
                 });
@@ -2697,9 +2740,15 @@
                         setTimeout(function() { trialBtn.remove(); }, 1400);
                     } else {
                         trialBtn.disabled = false;
-                        trialBtn.textContent = result === 'da_dung_thu'
-                            ? '\u26a0\ufe0f M\u00e1y n\u00e0y \u0111\u00e3 d\u00f9ng th\u1eed r\u1ed3i'
-                            : '\u26a0\ufe0f L\u1ed7i m\u1ea1ng, th\u1eed l\u1ea1i';
+                        if (result === 'da_dung_thu') {
+                            trialBtn.textContent = '\u26a0\ufe0f M\u00e1y n\u00e0y \u0111\u00e3 d\u00f9ng th\u1eed r\u1ed3i';
+                        } else if (result === 'gioi_han_ip') {
+                            trialBtn.textContent = '\u26a0\ufe0f M\u1ea1ng n\u00e0y \u0111\u00e3 d\u00f9ng h\u1ebft l\u01b0\u1ee3t th\u1eed';
+                        } else if (result === 'sai_thiet_bi') {
+                            trialBtn.textContent = '\u26a0\ufe0f L\u1ed7i thi\u1ebft b\u1ecb, nh\u1eafn Zalo h\u1ed7 tr\u1ee3';
+                        } else {
+                            trialBtn.textContent = '\u26a0\ufe0f L\u1ed7i m\u1ea1ng, th\u1eed l\u1ea1i';
+                        }
                     }
                 });
             };
