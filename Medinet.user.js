@@ -988,10 +988,10 @@
     function te6AutoFillCurrentPage(silent) {
         var config = te6GetAutoFillConfig();
         var path = location.pathname;
-        if (!config) { _te6AutoFillDonePath = null; return; }
+        if (!config) { _te6AutoFillDonePath = null; return 0; }
 
         var allGroups = document.querySelectorAll('.dx-radiogroup');
-        if (!allGroups.length) return;
+        if (!allGroups.length) return 0;
 
         var groups;
         if (config.mode === 'index') {
@@ -1008,9 +1008,8 @@
         } else {
             groups = allGroups;
         }
-        if (!groups.length) return;
+        if (!groups.length) return 0;
 
-        var clickedAny = false;
         groups.forEach(function (group, idx) {
             var wantText = config.mode === 'text' ? config.text : config.values[idx];
             if (!wantText) return;
@@ -1018,19 +1017,36 @@
             for (var i = 0; i < items.length; i++) {
                 var text = (items[i].textContent || '').trim();
                 if (text.indexOf(wantText) !== -1) {
-                    if (!items[i].classList.contains('dx-radiobutton-checked')) {
-                        items[i].click();
-                        clickedAny = true;
-                    }
+                    if (!items[i].classList.contains('dx-radiobutton-checked')) items[i].click();
                     break;
                 }
             }
         });
 
-        if (!silent && clickedAny && _te6AutoFillDonePath !== path) {
+        // Dem lai TU DAU (doc DOM tuoi, KHONG dua vao co "vua click" o
+        // tren) so o hien DANG DUNG gia tri mong muon - tranh dem trung
+        // neu MutationObserver goi ham nay nhieu lan lien tiep cho CUNG 1
+        // thay doi truoc khi DOM kip cap nhat class "checked".
+        var doneCount = 0;
+        groups.forEach(function (group, idx) {
+            var wantText = config.mode === 'text' ? config.text : config.values[idx];
+            if (!wantText) return;
+            var items = group.querySelectorAll('.dx-item.dx-radiobutton');
+            for (var i = 0; i < items.length; i++) {
+                var text = (items[i].textContent || '').trim();
+                if (text.indexOf(wantText) !== -1) {
+                    if (items[i].classList.contains('dx-radiobutton-checked')) doneCount++;
+                    break;
+                }
+            }
+        });
+
+        if (!silent && doneCount > 0 && _te6AutoFillDonePath !== path) {
             showToast('✅ Đã tự động điền giá trị mặc định');
         }
         _te6AutoFillDonePath = path;
+        te6BillDelta(location.href + '|main', doneCount);
+        return doneCount;
     }
 
     // ---- Kham lam sang (tre duoi 6 tuoi): 48 truong radio ----
@@ -1056,25 +1072,26 @@
 
     function te6KlsSelectRadio(fieldClass, optionIndex) {
         var wrapper = document.querySelector('.h-item.' + CSS.escape(fieldClass));
-        if (!wrapper) return { ok: false, reason: 'khong-tim-thay-truong' };
+        if (!wrapper) return { ok: false, reason: 'khong-tim-thay-truong', clicked: false };
         var radioGroup = wrapper.querySelector('.dx-radiogroup');
-        if (!radioGroup) return { ok: false, reason: 'khong-co-radiogroup' };
+        if (!radioGroup) return { ok: false, reason: 'khong-co-radiogroup', clicked: false };
         var items = radioGroup.querySelectorAll('.dx-item.dx-radiobutton');
-        if (!items || !items[optionIndex]) return { ok: false, reason: 'khong-co-option' };
+        if (!items || !items[optionIndex]) return { ok: false, reason: 'khong-co-option', clicked: false };
         var target = items[optionIndex];
-        if (!target.classList.contains('dx-radiobutton-checked')) target.click();
-        return { ok: true };
+        var wasChecked = target.classList.contains('dx-radiobutton-checked');
+        if (!wasChecked) target.click();
+        return { ok: true, clicked: !wasChecked };
     }
 
     function te6FillKhamLamSang(silent) {
-        var done = 0, missed = [];
+        var done = 0, clicked = 0, missed = [];
         Object.keys(TE6_KLS_FIELD_MAP).forEach(function (fieldClass) {
             var result = te6KlsSelectRadio(fieldClass, TE6_KLS_FIELD_MAP[fieldClass]);
-            if (result.ok) done++; else missed.push(fieldClass + ' (' + result.reason + ')');
+            if (result.ok) { done++; if (result.clicked) clicked++; } else missed.push(fieldClass + ' (' + result.reason + ')');
         });
         var total = Object.keys(TE6_KLS_FIELD_MAP).length;
         if (missed.length) console.warn('[TE6] Khong xu ly duoc:', missed);
-        if (silent) return { done: done, total: total };
+        if (silent) return { done: done, total: total, clicked: clicked };
         if (done === total) {
             showToast('✅ Đã điền ' + done + '/' + total + ' trường Khám lâm sàng');
         } else if (done > 0) {
@@ -1082,16 +1099,21 @@
         } else {
             showToast('❌ Không tìm thấy trường nào để điền. Kiểm tra lại trang.', 'error');
         }
-        return { done: done, total: total };
+        return { done: done, total: total, clicked: clicked };
     }
 
     var _te6KlsAutoFillDonePath = null;
 
+    // Tra ve SO LUONG truong VUA duoc click that su (khong tinh cac truong
+    // da dung san tu truoc) - dung de tinh CHINH XAC so luot can tru (moi
+    // 1 truong click that = 1 luot = 0.01 Medi), tranh tru tien khi khong
+    // lam gi ca (vd trang da dien san, hoac trang khong co truong nao
+    // thuoc dang nay).
     function te6AutoFillKhamLamSang() {
         var path = location.pathname;
-        if (path.indexOf('KhamLamSang_MC') === -1) { _te6KlsAutoFillDonePath = null; return; }
+        if (path.indexOf('KhamLamSang_MC') === -1) { _te6KlsAutoFillDonePath = null; return 0; }
         var firstField = document.querySelector('.h-item.' + CSS.escape(Object.keys(TE6_KLS_FIELD_MAP)[0]));
-        if (!firstField) return;
+        if (!firstField) return 0;
         var result = te6FillKhamLamSang(true);
         if (result.done > 0 && _te6KlsAutoFillDonePath !== path) {
             if (result.done === result.total) {
@@ -1101,23 +1123,26 @@
             }
         }
         _te6KlsAutoFillDonePath = path;
+        te6BillDelta(location.href + '|kls', result.done);
+        return result.clicked;
     }
 
     // ---- Thong tin hanh chinh (tre duoi 6 tuoi): tich cac muc Tien su / Doi tuong-chi tra ----
     function te6ClickRadioInGroup(fieldClass, wantText) {
         var wrapper = document.querySelector('.h-item.' + CSS.escape(fieldClass));
-        if (!wrapper) return false;
+        if (!wrapper) return { found: false, clicked: false };
         var group = wrapper.querySelector('.dx-radiogroup');
-        if (!group) return false;
+        if (!group) return { found: false, clicked: false };
         var items = group.querySelectorAll('.dx-item.dx-radiobutton');
         for (var i = 0; i < items.length; i++) {
             var text = (items[i].textContent || '').trim();
             if (text.indexOf(wantText) !== -1) {
-                if (!items[i].classList.contains('dx-radiobutton-checked')) items[i].click();
-                return true;
+                var wasChecked = items[i].classList.contains('dx-radiobutton-checked');
+                if (!wasChecked) items[i].click();
+                return { found: true, clicked: !wasChecked };
             }
         }
-        return false;
+        return { found: false, clicked: false };
     }
 
     function te6SimulateClick(el) {
@@ -1131,7 +1156,7 @@
 
     function te6ClickListItem(fieldClass, wantText) {
         var wrapper = document.querySelector('.h-item.' + CSS.escape(fieldClass));
-        if (!wrapper) return false;
+        if (!wrapper) return { found: false, clicked: false };
         var items = wrapper.querySelectorAll('.dx-list-item');
         for (var i = 0; i < items.length; i++) {
             var contentEl = items[i].querySelector('.dx-list-item-content') || items[i];
@@ -1142,30 +1167,30 @@
                 return items[i].classList.contains('dx-list-item-selected')
                     || items[i].getAttribute('aria-selected') === 'true';
             };
-            if (isSelected()) return true;
+            if (isSelected()) return { found: true, clicked: false };
 
             // Thu 1: click truc tiep vao dong
             items[i].click();
-            if (isSelected()) return true;
+            if (isSelected()) return { found: true, clicked: true };
 
             // Thu 2: click vao o radio/checkbox ben trong (mot so widget chi bat su kien o do)
             var icon = items[i].querySelector('.dx-list-select-radiobutton, .dx-list-select-checkbox, .dx-radio-value-container, .dx-checkbox-container');
             if (icon) {
                 icon.click();
-                if (isSelected()) return true;
+                if (isSelected()) return { found: true, clicked: true };
             }
 
             // Thu 3: mo phong day du chuoi su kien con tro/chuot
             te6SimulateClick(items[i]);
-            if (isSelected()) return true;
+            if (isSelected()) return { found: true, clicked: true };
             if (icon) {
                 te6SimulateClick(icon);
-                if (isSelected()) return true;
+                if (isSelected()) return { found: true, clicked: true };
             }
 
-            return false; // tim thay nhung khong tick duoc, de poll thu lai
+            return { found: true, clicked: false }; // tim thay nhung khong tick duoc, de poll thu lai
         }
-        return false;
+        return { found: false, clicked: false };
     }
 
     var TE6_TTHC_FIELDS = [
@@ -1178,12 +1203,12 @@
     ];
 
     function te6FillThongTinHanhChinh(silent) {
-        var done = 0, missed = [];
+        var done = 0, clicked = 0, missed = [];
         TE6_TTHC_FIELDS.forEach(function (item) {
-            var ok = item.mode === 'radio'
+            var r = item.mode === 'radio'
                 ? te6ClickRadioInGroup(item.field, item.value)
                 : te6ClickListItem(item.field, item.value);
-            if (ok) done++; else missed.push(item.field);
+            if (r.found) { done++; if (r.clicked) clicked++; } else missed.push(item.field);
         });
         var total = TE6_TTHC_FIELDS.length;
         if (missed.length) console.warn('[TE6] Khong xu ly duoc (Thong tin hanh chinh):', missed);
@@ -1192,22 +1217,25 @@
             else if (done > 0) showToast('⚠️ Đã điền ' + done + '/' + total + ' mục, thiếu ' + missed.length + ' (xem console)', 'warn');
             else showToast('❌ Không tìm thấy mục nào để điền. Kiểm tra lại trang.', 'error');
         }
-        return { done: done, total: total };
+        return { done: done, total: total, clicked: clicked };
     }
 
     var _te6TthcAutoFillDonePath = null;
     var _te6TthcPollTimer = null;
     var _te6TthcPollPath = null;
 
+    // Tra ve so muc VUA duoc click that su o lan goi nay (dung tham khao,
+    // viec tinh phi thuc te da chuyen sang te6BillDelta ben duoi - tu
+    // dong chi tinh dung phan tang them, an toan voi ca F5 lan poll lai).
     function te6AutoFillThongTinHanhChinh() {
         var path = location.pathname;
         if (path.indexOf('ThongTinHanhChinh_MC') === -1) {
             _te6TthcAutoFillDonePath = null;
             if (_te6TthcPollTimer) { clearInterval(_te6TthcPollTimer); _te6TthcPollTimer = null; _te6TthcPollPath = null; }
-            return;
+            return 0;
         }
         var firstField = document.querySelector('.h-item.' + CSS.escape(TE6_TTHC_FIELDS[0].field));
-        if (!firstField) return;
+        if (!firstField) return 0;
 
         var result = te6FillThongTinHanhChinh(true);
         if (result.done > 0 && _te6TthcAutoFillDonePath !== path) {
@@ -1218,9 +1246,12 @@
             }
         }
         if (result.done === result.total) _te6TthcAutoFillDonePath = path;
+        te6BillDelta(location.href + '|tthc', result.done);
 
         // Mot so danh sach (Hinh thuc chi tra, Dia diem kham) tai du lieu bat dong bo
         // va co the chua kip render ngay lan dau -> thu lai vai lan trong vai giay.
+        // Cac truong PHAT SINH THEM trong luc poll nay se duoc tinh phi
+        // rieng qua te6BillDelta, tu dong chi tinh dung phan tang them.
         if (result.done < result.total && _te6TthcPollPath !== path) {
             _te6TthcPollPath = path;
             if (_te6TthcPollTimer) clearInterval(_te6TthcPollTimer);
@@ -1234,6 +1265,7 @@
                     return;
                 }
                 var r = te6FillThongTinHanhChinh(true);
+                te6BillDelta(location.href + '|tthc', r.done);
                 if (r.done === r.total) {
                     showToast('✅ Đã tự động điền ' + r.done + '/' + r.total + ' mục Thông tin hành chính');
                     _te6TthcAutoFillDonePath = location.pathname;
@@ -1243,21 +1275,51 @@
                 }
             }, 500);
         }
+        return result.clicked;
     }
 
-    // Goi tu dong khi trang thay doi (chi khi con Medi). Ham nay co the bi
-    // MutationObserver goi NHIEU LAN cho CUNG 1 trang - dung 1 "chot" theo
-    // URL de CHI TRU CREDIT 1 LAN MOI TRANG, tranh tinh phi trung lap.
-    var _te6LastBilledUrl = null;
+    // ================================================================
+    //  TINH PHI THEO "PHAN TANG THEM" (delta billing) - moi 1 truong/o
+    //  DUOC XAC NHAN DUNG = 1 luot = 0.01 Medi, tinh CHINH XAC theo dung
+    //  so luong cong viec thuc te, khong con muc khoan co dinh nhu truoc.
+    //
+    //  Co che: moi "key" (1 trang + 1 khu vuc dien, vd URL + "|kls") duoc
+    //  luu 1 con so "da tung tru phi cho bao nhieu truong DUNG tren key
+    //  nay" trong sessionStorage - moi lan quet lai, CHI tru phan CHENH
+    //  LECH TANG THEM so voi con so da luu, roi cap nhat lai con so do.
+    //  Uu diem so voi cach "chi tru 1 lan/URL" truoc day:
+    //  - Khong bao gio tru trung cho 1 truong da duoc tinh phi truoc do
+    //    (an toan ngay ca khi MutationObserver goi lai nhieu lan cho CUNG
+    //    1 thay doi, vi con so "hien dang dung" doc tuoi tu DOM moi lan,
+    //    khong dua vao co "vua click" de roi).
+    //  - Van tinh phi dung neu SAU DO co THEM truong moi duoc dien dung
+    //    (vd danh sach tai du lieu cham, poll lai vai giay sau van tinh
+    //    dung), thay vi khoa cung "chi 1 lan cho ca URL" nhu ban truoc.
+    //  - Song sot qua F5/tai lai trang (sessionStorage), nen refresh
+    //    trang KHONG BAO GIO tru phi lai cho nhung truong da tinh roi.
+    // ================================================================
+    function te6GetBilledCount(key) {
+        try {
+            var v = parseInt(sessionStorage.getItem('_mtt_billed_count:' + key), 10);
+            return isNaN(v) ? 0 : v;
+        } catch (e) { return 0; }
+    }
+    function te6SetBilledCount(key, v) {
+        try { sessionStorage.setItem('_mtt_billed_count:' + key, String(v)); } catch (e) {}
+    }
+    function te6BillDelta(key, currentDoneCount) {
+        var billedSoFar = te6GetBilledCount(key);
+        var delta = currentDoneCount - billedSoFar;
+        if (delta <= 0) return;
+        te6SetBilledCount(key, currentDoneCount);
+        spendCredits(delta); // delta don vi = delta luot (1 luot = 0.01 Medi)
+    }
+
     function te6RunAutoFillIfLicensed() {
         if (!isLicenseValid()) return;
         te6AutoFillCurrentPage();
         te6AutoFillKhamLamSang();
         te6AutoFillThongTinHanhChinh();
-        if (_te6LastBilledUrl !== location.href) {
-            _te6LastBilledUrl = location.href;
-            spendCredits(DEFAULT_ACTION_COST);
-        }
     }
 
     // ================================================================
@@ -2253,6 +2315,17 @@
         return _verifiedWallet.exp > Math.floor(Date.now() / 1e3);
     }
 
+    // Dinh dang so du Medi LUON DUNG 2 CHU SO THAP PHAN (vd "4.99", "5.00",
+    // khong bao gio "4.9" hay "4.899999999999995") - dung 1 cho DUY NHAT
+    // nay cho MOI noi hien thi so Medi ra man hinh, tranh moi truong hop
+    // hien so le sai dinh dang. Math.round(...*100)/100 truoc khi toFixed
+    // de chan luon ca truong hop sai so dau phay dong lam lech chu so cuoi.
+    function fmtMedi(n) {
+        var v = Math.round((typeof n === 'number' ? n : 0) * 100) / 100;
+        if (v < 0) v = 0;
+        return v.toFixed(2);
+    }
+
     // Kiem tra chu ky cua 1 token "payload.sig" (dang Worker tra ve).
     // Tra ve Promise<boolean|object> - object khi hop le (da parse payload),
     // false khi chu ky sai / het han / mid khong khop may hien tai.
@@ -2284,10 +2357,17 @@
     // token tho (de lan tai trang sau co the verify lai ngay, khong can
     // cho goi mang). KHONG BAO GIO ghi thang so balance vao storage nua -
     // chi ghi token (sua tay token se lam sai chu ky, vo dung).
+    //
+    // QUAN TRONG: dung "estimatedBalance" (da tru di phan live_clicks dang
+    // dung do NHUNG CHUA DU 100 luot de tru chinh thuc) lam SO DU THAT DUY
+    // NHAT cho ca gating (isLicenseValid) lan hien thi - KHONG con phan
+    // biet "so du chinh thuc" rieng nua, tranh tinh trang refresh trang
+    // lai thay so "nhay nguoc len" ve muc chua tru cua phan dang dung do.
     function applyVerifiedToken(payload, rawToken) {
+        var realBalance = (typeof payload.estimatedBalance === 'number') ? payload.estimatedBalance : payload.balance;
         _verifiedWallet = {
-            balance: payload.balance,
-            estimatedBalance: (typeof payload.estimatedBalance === 'number') ? payload.estimatedBalance : payload.balance,
+            balance: realBalance,
+            estimatedBalance: realBalance,
             trialUsed: !!payload.trialUsed,
             exp: payload.exp
         };
@@ -2539,28 +2619,56 @@
     //   ca ngan luot, dung nhu yeu cau "khong tinh tung click cho nang
     //   he thong"). Worker moi la noi TRU CHINH XAC va tra ve token moi.
     // Bao cho Worker biet dang dung do bao nhieu luot (KHONG tru tien, chi
-    // GHI DE 1 con so de Admin xem duoc so uoc tinh gan-real-time thay vi
-    // phai doi du 100 luot). Dung DEBOUNCE (2 giay) - neu bam lien tuc nhieu
-    // "Thao tac nhanh" chi 1 request duoc gui sau khi ngung bam, tranh spam
-    // Worker ma van khong lam cham luong dien tu dong (khong cho ket qua).
+    // GHI DE 1 con so de tinh SO DU THAT gan-real-time - ca script lan
+    // Admin deu doc so nay). Dung DEBOUNCE (2 giay) - neu bam lien tuc
+    // nhieu "Thao tac nhanh" chi 1 request duoc gui sau khi ngung bam,
+    // tranh spam Worker ma van khong lam cham luong dien tu dong.
+    // Dung { keepalive: true } de request VAN DUOC GUI DI ngay ca khi
+    // trang dong/chuyen huong ngay sau do (browser giu request song song
+    // ngam, khong huy nhu fetch thuong) - tranh tinh trang refresh trang
+    // qua nhanh lam server chua kip nhan luot dung moi nhat, khien so du
+    // hien thi "nhay nguoc len" sau khi tai lai trang.
     var _heartbeatTimer = null;
+    var _lastHeartbeatLiveClicks = null;
+    function doSendHeartbeatNow(liveClicks) {
+        var mid = getMachineId();
+        fetch(WALLET_API + '/heartbeat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Secret': getDeviceSecret() },
+            body: JSON.stringify({ mid: mid, liveClicks: liveClicks }),
+            keepalive: true,
+        }).catch(function() {}); // loi mang thi bo qua, khong anh huong tinh tien that
+    }
     function sendHeartbeat(liveClicks) {
+        _lastHeartbeatLiveClicks = liveClicks;
         clearTimeout(_heartbeatTimer);
         _heartbeatTimer = setTimeout(function() {
-            var mid = getMachineId();
-            fetch(WALLET_API + '/heartbeat', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Secret': getDeviceSecret() },
-                body: JSON.stringify({ mid: mid, liveClicks: liveClicks }),
-            }).catch(function() {}); // loi mang thi bo qua, khong anh huong tinh tien that
+            doSendHeartbeatNow(liveClicks);
         }, 2000);
     }
+    // Gui NGAY (bo qua debounce) khi nguoi dung sap roi trang/tai lai
+    // trang - dam bao Worker nhan duoc so luot moi nhat truoc khi trang
+    // dong, thay vi cho het 2 giay debounce co the khong kip.
+    function flushHeartbeatNow() {
+        if (_lastHeartbeatLiveClicks === null) return;
+        clearTimeout(_heartbeatTimer);
+        doSendHeartbeatNow(_lastHeartbeatLiveClicks);
+    }
+    window.addEventListener('pagehide', flushHeartbeatNow);
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') flushHeartbeatNow();
+    });
 
     function spendCredits(cost) {
         var unsynced = getUnsyncedClicks() + cost;
         setUnsyncedClicks(unsynced);
         // Tru lac quan CHI de UI phan hoi nhanh - khong lam thay doi token
-        // da luu (token that van la ban ky boi Worker gan nhat).
-        _verifiedWallet.balance = Math.max(0, _verifiedWallet.balance - cost / 100);
+        // da luu (token that van la ban ky boi Worker gan nhat). LUON lam
+        // TRON VE LUOI 0.01 ngay sau khi tru (khong de phep tru don thuan
+        // ma khong lam tron) - neu khong, sai so dau phay dong (floating
+        // point) se DON DAN NGAY CANG LON qua nhieu lan tru lien tiep,
+        // gay hien thi so le dai ngoang kieu "4.8999999999999995" thay vi
+        // "4.90" gon gang.
+        _verifiedWallet.balance = Math.round(Math.max(0, _verifiedWallet.balance - cost / 100) * 100) / 100;
         sendHeartbeat(unsynced); // bao Worker de Admin xem duoc so uoc tinh gan-real-time
 
         // Canh bao sap het Medi (khong chan thao tac, chi bao truoc)
@@ -2682,10 +2790,10 @@
             borderRadius: '14px', padding: '18px', margin: '14px 0 6px',
         });
         balanceBox.innerHTML =
-            '<div style="font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">S\u1ed1 d\u01b0 hi\u1ec7n t\u1ea1i</div>' +
+            '<div style="font-size:13px;color:#4b5563;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">S\u1ed1 d\u01b0 hi\u1ec7n t\u1ea1i</div>' +
             '<div id="_mtt_balance_num" style="font-size:40px;font-weight:900;color:' + (cache.balance > 0 ? '#2e7d32' : '#e65100') + '">' +
-            cache.balance + ' <span style="font-size:19px;font-weight:700">Medi</span></div>' +
-            '<div id="_mtt_balance_sub" style="font-size:14px;color:#999;margin-top:4px">\u2248 ' + Math.round(cache.balance * 100) + ' l\u01b0\u1ee3t autofill/autoclick c\u00f2n l\u1ea1i</div>';
+            fmtMedi(cache.balance) + ' <span style="font-size:19px;font-weight:700">Medi</span></div>' +
+            '<div id="_mtt_balance_sub" style="font-size:14px;color:#374151;font-weight:600;margin-top:4px">\u2248 ' + Math.round(cache.balance * 100) + ' l\u01b0\u1ee3t autofill/autoclick c\u00f2n l\u1ea1i</div>';
         card.appendChild(balanceBox);
 
         // Cap nhat DONG BO ca so, dong chu "luot con lai" va mau nen hop -
@@ -2695,7 +2803,7 @@
             var numEl = document.getElementById('_mtt_balance_num');
             var subEl = document.getElementById('_mtt_balance_sub');
             var boxEl = document.getElementById('_mtt_balance_box');
-            if (numEl) numEl.innerHTML = balance + ' <span style="font-size:19px;font-weight:700">Medi</span>';
+            if (numEl) numEl.innerHTML = fmtMedi(balance) + ' <span style="font-size:19px;font-weight:700">Medi</span>';
             if (subEl) subEl.textContent = '\u2248 ' + Math.round(balance * 100) + ' l\u01b0\u1ee3t autofill/autoclick c\u00f2n l\u1ea1i';
             if (numEl) numEl.style.color = balance > 0 ? '#2e7d32' : '#e65100';
             if (boxEl) {
@@ -2720,6 +2828,13 @@
             });
         };
         card.appendChild(refreshBtn);
+
+        // Tu dong lam moi so du NGAY khi mo popup (khong can bam nut) -
+        // dam bao luon hien dung so du THAT tinh den thoi diem hien tai,
+        // khong phu thuoc token cache co the hoi cu (vd vua tai lai trang).
+        refreshWalletBalance(function(ok, c) {
+            if (ok) updateBalanceDisplay(c.balance);
+        });
 
         // Nut dung thu (chi hien neu chua dung, tu Worker bao ve chinh)
         if (!cache.trialUsed) {
@@ -2763,8 +2878,8 @@
         // Huong dan nap them
         var topupMsg = document.createElement('div');
         topupMsg.innerHTML =
-            '<div style="font-size:15px;color:#555;font-weight:700;margin-bottom:8px;text-align:left">N\u1ea1p th\u00eam Medi</div>' +
-            '<div style="font-size:14px;color:#777;text-align:left;line-height:1.8">' +
+            '<div style="font-size:15px;color:#374151;font-weight:700;margin-bottom:8px;text-align:left">N\u1ea1p th\u00eam Medi</div>' +
+            '<div style="font-size:14px;color:#4b5563;text-align:left;line-height:1.8">' +
             '\u2022 1.000\u0111 = 1 Medi = 100 l\u01b0\u1ee3t<br>' +
             '\u2022 T\u1ed1i thi\u1ec3u 100.000\u0111 (10 Medi)<br>' +
             '\u2022 T\u1eb7ng 5% khi n\u1ea1p \u2265 500.000\u0111, t\u1eb7ng 10% khi n\u1ea1p \u2265 1.000.000\u0111, t\u1eb7ng 15% khi n\u1ea1p \u2265 2.000.000\u0111' +
@@ -2780,7 +2895,7 @@
             textAlign: 'left', border: '1px solid #e0e4ea',
         });
         midBox.innerHTML =
-            '<div style="font-size:12.5px;color:#999;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">M\u00e3 m\u00e1y c\u1ee7a b\u1ea1n (ghi v\u00e0o n\u1ed9i dung CK)</div>' +
+            '<div style="font-size:12.5px;color:#4b5563;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">M\u00e3 m\u00e1y c\u1ee7a b\u1ea1n (ghi v\u00e0o n\u1ed9i dung CK)</div>' +
             '<div style="display:flex;align-items:center;gap:8px">' +
             '<b style="font-size:19px;color:#1565c0;letter-spacing:1px;flex:1">' + mid + '</b>' +
             '<button id="_mtt_copy_mid" style="padding:7px 12px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap">\ud83d\udccb Sao ch\u00e9p</button>' +
@@ -2813,17 +2928,18 @@
 
         // Chip chon muc tien + QR VietQR, tu dong dien dung Ma may (mid) va
         // so tien da chon vao noi dung CK - khach chi can quet QR bang app
-        // ngan hang, khong can go tay so TK / noi dung nua.
+        // ngan hang, khong can go tay so TK / noi dung nua. Moi muc nam 1
+        // hang rieng, ghi ro so tien day du + % khuyen mai (giong web).
         var qrChipsBox = document.createElement('div');
         Object.assign(qrChipsBox.style, {
-            display: 'flex', gap: '6px', flexWrap: 'wrap',
-            marginBottom: '12px', justifyContent: 'center',
+            display: 'flex', flexDirection: 'column', gap: '8px',
+            marginBottom: '14px',
         });
         var QR_AMOUNTS = [
-            { amt: 100000, label: '100k' },
-            { amt: 500000, label: '500k' },
-            { amt: 1000000, label: '1tr' },
-            { amt: 2000000, label: '2tr' },
+            { amt: 100000, label: '100.000 VN\u0110', bonus: '', medi: '100 Medi' },
+            { amt: 500000, label: '500.000 VN\u0110', bonus: '+5%', medi: '525 Medi' },
+            { amt: 1000000, label: '1.000.000 VN\u0110', bonus: '+10%', medi: '1.100 Medi' },
+            { amt: 2000000, label: '2.000.000 VN\u0110', bonus: '+15%', medi: '2.300 Medi' },
         ];
         var qrImgEl = document.createElement('img');
         var currentQrAmt = 100000;
@@ -2834,25 +2950,32 @@
         QR_AMOUNTS.forEach(function(opt, idx) {
             var chip = document.createElement('button');
             chip.type = 'button';
-            chip.textContent = opt.label;
             chip.dataset.amt = opt.amt;
             var isActive = idx === 0;
+            chip.innerHTML =
+                '<span style="font-weight:800;font-size:14.5px">' + opt.label + '</span>' +
+                (opt.bonus ? '<span style="font-weight:800;font-size:12px;background:' + (isActive ? 'rgba(255,255,255,0.25)' : '#e8f5e9') + ';color:' + (isActive ? '#fff' : '#2e7d32') + ';border-radius:999px;padding:2px 9px;margin-left:8px">' + opt.bonus + '</span>' : '') +
+                '<span style="float:right;font-size:12.5px;font-weight:700;opacity:.9">' + opt.medi + '</span>';
             Object.assign(chip.style, {
-                padding: '7px 14px', borderRadius: '999px', cursor: 'pointer',
-                fontSize: '13px', fontWeight: '700',
+                display: 'block', width: '100%', padding: '11px 14px', borderRadius: '10px', cursor: 'pointer',
                 border: '1.5px solid ' + (isActive ? '#2e7d32' : '#c8e0cb'),
                 background: isActive ? '#2e7d32' : '#fff',
                 color: isActive ? '#fff' : '#2e7d32',
+                textAlign: 'left', boxSizing: 'border-box',
             });
             chip.addEventListener('click', function() {
-                Array.prototype.forEach.call(qrChipsBox.children, function(c) {
+                Array.prototype.forEach.call(qrChipsBox.children, function(c, i) {
                     c.style.background = '#fff';
                     c.style.color = '#2e7d32';
                     c.style.borderColor = '#c8e0cb';
+                    var badge = c.querySelector('span:nth-child(2)');
+                    if (badge && QR_AMOUNTS[i].bonus) { badge.style.background = '#e8f5e9'; badge.style.color = '#2e7d32'; }
                 });
                 chip.style.background = '#2e7d32';
                 chip.style.color = '#fff';
                 chip.style.borderColor = '#2e7d32';
+                var activeBadge = chip.querySelector('span:nth-child(2)');
+                if (activeBadge && opt.bonus) { activeBadge.style.background = 'rgba(255,255,255,0.25)'; activeBadge.style.color = '#fff'; }
                 currentQrAmt = parseInt(chip.dataset.amt, 10);
                 renderQrImg();
             });
@@ -2872,7 +2995,7 @@
         renderQrImg();
         qrBox.appendChild(qrImgEl);
         var qrNote = document.createElement('div');
-        qrNote.textContent = '\ud83d\udcf1 M\u1edf app ng\u00e2n h\u00e0ng \u2192 qu\u00e9t m\u00e3 n\u00e0y \u2014 s\u1ed1 ti\u1ec1n & n\u1ed9i dung Ma m\u00e1y \u0111\u01b0\u1ee3c \u0111i\u1ec1n s\u1eb5n, kh\u00f4ng c\u1ea7n g\u00f5 tay';
+        qrNote.textContent = '\ud83d\udcf1 M\u1edf app ng\u00e2n h\u00e0ng \u2192 qu\u00e9t m\u00e3 n\u00e0y \u2014 s\u1ed1 ti\u1ec1n & n\u1ed9i dung M\u00e3 m\u00e1y \u0111\u01b0\u1ee3c \u0111i\u1ec1n s\u1eb5n, kh\u00f4ng c\u1ea7n g\u00f5 tay';
         Object.assign(qrNote.style, {
             fontSize: '12.5px', color: '#2e7d32', marginTop: '10px', lineHeight: '1.6', fontWeight: '600',
         });
@@ -2920,12 +3043,12 @@
         zaloBtn.innerHTML =
             '<img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" ' +
             'alt="Zalo" style="width:18px;height:18px;vertical-align:middle;margin-right:7px">' +
-            'Nh\u1eafn Zalo 0868.91.97.90 (h\u1ed7 tr\u1ee3 n\u1ebfu chuy\u1ec3n kho\u1ea3n b\u1ecb l\u1ed7i)';
+            '<span>Nh\u1eafn Zalo 0868.91.97.90<br><span style="font-weight:600;font-size:12.5px;opacity:.9">H\u1ed7 tr\u1ee3 n\u1ebfu chuy\u1ec3n kho\u1ea3n b\u1ecb l\u1ed7i</span></span>';
         Object.assign(zaloBtn.style, {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '100%', padding: '13px', borderRadius: '12px',
+            width: '100%', padding: '12px', borderRadius: '12px',
             background: '#78909c', color: '#fff', fontSize: '14px', fontWeight: '700',
-            textDecoration: 'none', boxSizing: 'border-box',
+            textDecoration: 'none', boxSizing: 'border-box', textAlign: 'center', lineHeight: '1.5',
         });
         card.appendChild(zaloBtn);
 
@@ -3119,7 +3242,7 @@
                 var statusArea = document.createElement('div');
                 statusArea.textContent = '\u23f3 \u0110ang ki\u1ec3m tra ph\u00eci\u00ean b\u1ea3n m\u1edbi...';
                 Object.assign(statusArea.style, {
-                    fontSize: '15px', color: '#6b7280', minHeight: '28px',
+                    fontSize: '15px', color: '#374151', fontWeight: '600', minHeight: '28px',
                     marginBottom: '18px', lineHeight: '1.6',
                     padding: '10px 14px', borderRadius: '8px',
                     background: '#f9fafb', border: '1px solid #e5e7eb',
@@ -3317,11 +3440,15 @@
                 autoRow.appendChild(chkLabel);
                 body.appendChild(autoRow);
 
-                // note about auto-update
+                // note ve tu dong cap nhat - giai thich ro thay vi lap
+                // lai dieu nguoi dung da thay (script tu kiem tra khi mo
+                // popup nay roi), tap trung vao cho khac biet thuc su:
+                // Tampermonkey van can nguoi dung tu bam "Install" de
+                // hoan tat, khong tu cai ngam sau lung.
                 var autoNote = document.createElement('div');
-                autoNote.textContent = '\u24d8 Khi b\u1eadt, script s\u1ebd ki\u1ec3m tra t\u1ef1 \u0111\u1ed9ng m\u1ed7i l\u1ea7n t\u1ea3i trang v\u00e0 m\u1edf tab c\u00e0i \u0111\u1eb7t n\u1ebfu c\u00f3 phi\u00ean b\u1ea3n m\u1edbi.';
+                autoNote.textContent = '\u2139\ufe0f T\u1eaft: b\u1ea1n c\u1ea7n t\u1ef1 m\u1edf m\u1ee5c n\u00e0y m\u1edbi bi\u1ebft c\u00f3 b\u1ea3n m\u1edbi. B\u1eadt: script t\u1ef1 ki\u1ec3m tra m\u1ed7i l\u1ea7n t\u1ea3i trang, m\u1edf s\u1eb5n tab c\u00e0i \u0111\u1eb7t n\u1ebfu c\u00f3 b\u1ea3n m\u1edbi \u2014 Tampermonkey v\u1eabn c\u1ea7n b\u1ea1n b\u1ea5m "Install" \u0111\u1ec3 ho\u00e0n t\u1ea5t, kh\u00f4ng t\u1ef1 c\u00e0i ng\u1ea7m.';
                 Object.assign(autoNote.style, {
-                    fontSize: '13px', color: '#9ca3af', marginTop: '8px', lineHeight: '1.6',
+                    fontSize: '13px', color: '#4b5563', fontWeight: '600', marginTop: '8px', lineHeight: '1.6',
                     paddingLeft: '28px',
                 });
                 body.appendChild(autoNote);
@@ -3397,6 +3524,18 @@
                     color: '#ffffff',
                 });
                 card.appendChild(name);
+                // Website chinh chu
+                var website = document.createElement('a');
+                website.href = 'https://medinetautofill.github.io/';
+                website.target = '_blank';
+                website.rel = 'noopener';
+                website.textContent = '\ud83c\udf10 medinetautofill.github.io';
+                Object.assign(website.style, {
+                    fontSize: '14px', color: 'rgba(255,255,255,0.85)',
+                    textDecoration: 'none', fontWeight: '600',
+                    display: 'inline-block', marginBottom: '2px',
+                });
+                card.appendChild(website);
                 // Divider
                 var div1 = document.createElement('div');
                 Object.assign(div1.style, {
@@ -3434,7 +3573,7 @@
                 });
                 var walletC = getWalletCache();
                 var licStatus = walletC.balance > 0
-                    ? ('\ud83d\udfe2 C\u00f2n <b>' + walletC.balance + ' Medi</b> (\u2248' + (walletC.balance * 100) + ' l\u01b0\u1ee3t)')
+                    ? ('\ud83d\udfe2 C\u00f2n <b>' + fmtMedi(walletC.balance) + ' Medi</b> (\u2248' + Math.round(walletC.balance * 100) + ' l\u01b0\u1ee3t)')
                     : '\ud83d\udd34 H\u1ebft Medi / Ch\u01b0a k\u00edch ho\u1ea1t';
                 licInfoBox.innerHTML =
                     '<div style="font-size:15px;color:rgba(255,255,255,0.7);margin-bottom:8px">\ud83d\udcb0 <b>V\u00ed Medi</b></div>' +
