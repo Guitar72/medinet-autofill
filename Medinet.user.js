@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      10.7
+// @version      10.8
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -3700,6 +3700,15 @@
                 if (document.getElementById(MODAL_ID)) {
                     document.getElementById(MODAL_ID).remove(); return;
                 }
+                var overlay = document.createElement('div');
+                overlay.id = MODAL_ID;
+                Object.assign(overlay.style, {
+                    position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.55)', zIndex: '9999999',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'Segoe UI, Arial, sans-serif',
+                    backdropFilter: 'blur(3px)',
+                });
                 var card = document.createElement('div');
                 Object.assign(card.style, {
                     background: '#fff', borderRadius: '20px',
