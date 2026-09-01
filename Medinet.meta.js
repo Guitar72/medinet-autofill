@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      10.5
+// @version      10.7
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*

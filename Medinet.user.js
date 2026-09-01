@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      10.5
+// @version      10.7
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -2902,7 +2902,30 @@
             '</div>';
         card.appendChild(midBox);
 
-        // O hien thi thong tin STK VA de khach TU CHUYEN KHOAN, he thong se
+        // O nhap Thong tin lien he (SDT bat buoc, Ten/Zalo tuy chon) - luu
+        // vao he thong (bang customers) TRUOC khi khach chuyen khoan, de
+        // Admin co san lien lac tra cuu khi khach hoi lai sau nay (lich
+        // su mua, bao hanh...). Gia tri duoc nho lai (GM_setValue) cho
+        // lan mo popup sau khong phai nhap lai.
+        var CONTACT_STORE_KEY = '_mtt_contact_info_v1';
+        var savedContact = {};
+        try { savedContact = JSON.parse(GM_getValue(CONTACT_STORE_KEY, '{}')) || {}; } catch (e) { savedContact = {}; }
+
+        var contactBox = document.createElement('div');
+        Object.assign(contactBox.style, {
+            background: '#fff8e1', borderRadius: '10px',
+            padding: '12px 16px', marginBottom: '14px',
+            textAlign: 'left', border: '1px solid #ffe082',
+        });
+        contactBox.innerHTML =
+            '<div style="font-size:12.5px;color:#6d4c00;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">\ud83d\udcde Th\u00f4ng tin li\u00ean h\u1ec7 (\u0111\u1ec3 h\u1ed7 tr\u1ee3/b\u1ea3o h\u00e0nh sau n\u00e0y)</div>' +
+            '<input id="_mtt_contact_phone" type="tel" placeholder="S\u1ed1 \u0111i\u1ec7n tho\u1ea1i (b\u1eaft bu\u1ed9c \u0111\u1ec3 t\u1ea1o QR)" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px;margin-bottom:8px" value="' + (savedContact.phone || '').replace(/"/g, '') + '">' +
+            '<input id="_mtt_contact_name" type="text" placeholder="T\u00ean c\u1ee7a b\u1ea1n (kh\u00f4ng b\u1eaft bu\u1ed9c)" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px;margin-bottom:8px" value="' + (savedContact.name || '').replace(/"/g, '') + '">' +
+            '<input id="_mtt_contact_zalo" type="text" placeholder="Zalo (n\u1ebfu kh\u00e1c SDT, kh\u00f4ng b\u1eaft bu\u1ed9c)" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px" value="' + (savedContact.zalo || '').replace(/"/g, '') + '">' +
+            '<div id="_mtt_contact_hint" style="font-size:12px;color:#e65100;margin-top:8px;line-height:1.6"></div>';
+        card.appendChild(contactBox);
+
+        // O hien thi thong tin STK VA để khach TU CHUYEN KHOAN, he thong se
         // tu dong cong Medi trong vai giay - vai phut (khong can nhan Zalo
         // cho Admin nua). Doi BANK_NAME/VA_NUMBER/VA_HOLDER neu doi ngan
         // hang/tai khoan sau nay.
@@ -2947,6 +2970,71 @@
             qrImgEl.src = 'https://img.vietqr.io/image/' + BANK_NAME + '-' + VA_NUMBER +
                 '-compact2.png?amount=' + currentQrAmt + '&addInfo=' + encodeURIComponent(mid);
         }
+
+        // ================================================================
+        // Xac thuc + luu Thong tin lien he - CHAN chon muc tien/tao QR cho
+        // toi khi SDT hop le (Ten/Zalo van tuy chon). Luu ca cuc bo
+        // (GM_setValue, de lan sau khong phai nhap lai) VA day len he
+        // thong (POST /customer/register - KHONG can Admin Key) de Admin
+        // co san lien lac tra cuu.
+        // ================================================================
+        function isPhoneValid(v) { return /^[0-9+ ]{8,15}$/.test((v || '').trim()); }
+        function getContactValues() {
+            return {
+                phone: (document.getElementById('_mtt_contact_phone') || {}).value || '',
+                name: (document.getElementById('_mtt_contact_name') || {}).value || '',
+                zalo: (document.getElementById('_mtt_contact_zalo') || {}).value || '',
+            };
+        }
+        function setChipsEnabled(enabled) {
+            qrChipsBox.style.opacity = enabled ? '1' : '.45';
+            qrChipsBox.style.pointerEvents = enabled ? 'auto' : 'none';
+            qrBox.style.opacity = enabled ? '1' : '.45';
+            qrBox.style.pointerEvents = enabled ? 'auto' : 'none';
+        }
+        var contactRegisteredFor = ''; // gia tri phone da dang ky thanh cong lan gan nhat, tranh spam goi lai
+        function syncContactState() {
+            var c = getContactValues();
+            var hintEl = document.getElementById('_mtt_contact_hint');
+            var ok = isPhoneValid(c.phone);
+            if (hintEl) {
+                hintEl.textContent = ok ? '' : 'Nh\u1eadp S\u1ed1 \u0111i\u1ec7n tho\u1ea1i \u0111\u1ec3 t\u1ea1o m\u00e3 QR (b\u1eaft bu\u1ed9c, gi\u00fap h\u1ed7 tr\u1ee3/b\u1ea3o h\u00e0nh sau n\u00e0y).';
+            }
+            setChipsEnabled(ok);
+            try { GM_setValue(CONTACT_STORE_KEY, JSON.stringify(c)); } catch (e) {}
+            if (ok && contactRegisteredFor !== c.phone) {
+                contactRegisteredFor = c.phone;
+                fetch(WALLET_API + '/customer/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mid: mid, phone: c.phone.trim(), name: c.name.trim(), zalo: c.zalo.trim() }),
+                }).catch(function() { /* khong chan trai nghiem neu loi mang, se thu lai lan sua tiep theo */ });
+                if (typeof reportPendingOrder === 'function') reportPendingOrder(currentQrAmt);
+            }
+            return ok;
+        }
+        setTimeout(function() {
+            ['_mtt_contact_phone', '_mtt_contact_name', '_mtt_contact_zalo'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) { el.addEventListener('input', syncContactState); el.addEventListener('blur', syncContactState); }
+            });
+            syncContactState();
+        }, 50);
+
+        // Bao truoc cho Worker biet khach dang chuan bi chuyen khoan muc
+        // tien nao (tao 1 don "Cho thanh toan" de Admin theo doi trong
+        // Dashboard) - khong chan trai nghiem QR neu goi that bai.
+        var reportedOrderFor = '';
+        function reportPendingOrder(amt) {
+            var key = mid + '|' + amt;
+            if (reportedOrderFor === key) return;
+            reportedOrderFor = key;
+            fetch(WALLET_API + '/order/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mid: mid, amountVnd: amt }),
+            }).catch(function() {});
+        }
         QR_AMOUNTS.forEach(function(opt, idx) {
             var chip = document.createElement('button');
             chip.type = 'button';
@@ -2978,6 +3066,7 @@
                 if (activeBadge && opt.bonus) { activeBadge.style.background = 'rgba(255,255,255,0.25)'; activeBadge.style.color = '#fff'; }
                 currentQrAmt = parseInt(chip.dataset.amt, 10);
                 renderQrImg();
+                reportPendingOrder(currentQrAmt);
             });
             qrChipsBox.appendChild(chip);
         });
@@ -3047,7 +3136,7 @@
         Object.assign(zaloBtn.style, {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: '100%', padding: '12px', borderRadius: '12px',
-            background: '#78909c', color: '#fff', fontSize: '14px', fontWeight: '700',
+            background: '#1565c0', color: '#fff', fontSize: '14px', fontWeight: '700',
             textDecoration: 'none', boxSizing: 'border-box', textAlign: 'center', lineHeight: '1.5',
         });
         card.appendChild(zaloBtn);
@@ -3164,7 +3253,7 @@
                 var card = document.createElement('div');
                 Object.assign(card.style, {
                     background: '#fff', borderRadius: '18px',
-                    padding: '0', width: '420px', maxWidth: '94vw',
+                    padding: '0', width: '640px', maxWidth: '94vw',
                     boxShadow: '0 24px 60px rgba(0,0,0,0.35)',
                     position: 'relative', overflow: 'hidden',
                 });
@@ -3463,12 +3552,12 @@
             }
         },
         {
-            emoji: '\u2139\ufe0f', label: 'T\u00e1c gi\u1ea3 v\u00e0 b\u1ea3n quy\u1ec1n',
+            emoji: '\ud83d\udcde', label: 'Li\u00ean h\u1ec7 v\u00e0 b\u1ea3o h\u00e0nh',
             tier: 'lite',
             color: '#6d28d9', hoverColor: '#5b21b6',
             check: function() { return true; },
             fn: function() {
-                var MODAL_ID = '_mtt_author_modal';
+                var MODAL_ID = '_mtt_contact_modal';
                 if (document.getElementById(MODAL_ID)) {
                     document.getElementById(MODAL_ID).remove(); return;
                 }
@@ -3483,125 +3572,240 @@
                 });
                 var card = document.createElement('div');
                 Object.assign(card.style, {
-                    background: 'linear-gradient(145deg,#0d47a1 0%,#1565c0 50%,#0d47a1 100%)',
-                    borderRadius: '20px',
-                    padding: '36px 32px 28px',
-                    maxWidth: '460px',
-                    width: '94vw',
-                    maxHeight: '92vh',
-                    overflowY: 'auto',
+                    background: '#fff', borderRadius: '20px',
+                    width: '640px', maxWidth: '94vw',
                     boxSizing: 'border-box',
-                    boxShadow: '0 25px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.1)',
-                    color: '#fff',
-                    textAlign: 'center',
-                    position: 'relative',
+                    boxShadow: '0 25px 60px rgba(0,0,0,0.45)',
+                    position: 'relative', overflow: 'hidden',
                 });
+
+                // header strip (giong phong cach modal "Cap nhat phien ban")
+                var header = document.createElement('div');
+                Object.assign(header.style, {
+                    background: 'linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%)',
+                    padding: '26px 30px 22px',
+                    display: 'flex', alignItems: 'center', gap: '16px',
+                });
+                var headerIcon = document.createElement('span');
+                headerIcon.textContent = '\ud83d\udc68\u200d\u2695\ufe0f';
+                Object.assign(headerIcon.style, { fontSize: '38px', lineHeight: '1' });
+                var headerText = document.createElement('div');
+                var headerTitle = document.createElement('div');
+                headerTitle.textContent = 'Li\u00ean h\u1ec7 v\u00e0 b\u1ea3o h\u00e0nh';
+                Object.assign(headerTitle.style, {
+                    fontSize: '24px', fontWeight: '800', color: '#fff', lineHeight: '1.2',
+                });
+                var headerSub = document.createElement('div');
+                headerSub.textContent = 'Medinet AutoFill \u2014 medinetautofill.github.io';
+                Object.assign(headerSub.style, {
+                    fontSize: '14px', color: 'rgba(255,255,255,0.85)', marginTop: '4px', fontWeight: '600',
+                });
+                headerText.appendChild(headerTitle);
+                headerText.appendChild(headerSub);
+                header.appendChild(headerIcon);
+                header.appendChild(headerText);
+                card.appendChild(header);
+
+                var closeBtn = document.createElement('button');
+                closeBtn.innerHTML = '\u00d7';
+                Object.assign(closeBtn.style, {
+                    position: 'absolute', top: '14px', right: '18px',
+                    background: 'rgba(255,255,255,0.25)', border: 'none',
+                    fontSize: '24px', color: '#fff', cursor: 'pointer',
+                    lineHeight: '1', width: '34px', height: '34px',
+                    borderRadius: '50%', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    fontWeight: '300',
+                });
+                closeBtn.addEventListener('mouseenter', function() { closeBtn.style.background = 'rgba(255,255,255,0.4)'; });
+                closeBtn.addEventListener('mouseleave', function() { closeBtn.style.background = 'rgba(255,255,255,0.25)'; });
+                closeBtn.addEventListener('click', function() { overlay.remove(); });
+                card.appendChild(closeBtn);
+
+                // body - 2 cot: Ho tro nhanh (Zalo) + Bao hanh, khong can cuon
+                var body = document.createElement('div');
+                Object.assign(body.style, {
+                    padding: '26px 30px 28px', display: 'grid',
+                    gridTemplateColumns: '1fr 1fr', gap: '18px',
+                });
+
+                function infoCard(bg, border, titleColor, titleText, innerHtml) {
+                    var box = document.createElement('div');
+                    Object.assign(box.style, {
+                        background: bg, border: '1.5px solid ' + border, borderRadius: '14px',
+                        padding: '18px 20px', boxSizing: 'border-box',
+                    });
+                    var t = document.createElement('div');
+                    t.textContent = titleText;
+                    Object.assign(t.style, {
+                        fontSize: '13px', fontWeight: '800', color: titleColor,
+                        textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: '10px',
+                    });
+                    box.appendChild(t);
+                    var inner = document.createElement('div');
+                    inner.innerHTML = innerHtml;
+                    box.appendChild(inner);
+                    return box;
+                }
+
+                var zaloCard = infoCard('#ecfdf5', '#a7f3d0', '#047857', '\ud83d\udcac H\u1ed7 tr\u1ee3 tr\u1ef1c ti\u1ebfp',
+                    '<div style="font-size:17px;font-weight:800;color:#065f46;margin-bottom:6px">Zalo: 0868.91.97.90</div>' +
+                    '<div style="font-size:14px;color:#374151;line-height:1.7">Nh\u1eafn tin khi c\u1ea7n h\u1ed7 tr\u1ee3 c\u00e0i \u0111\u1eb7t, l\u1ed7i chuy\u1ec3n kho\u1ea3n, ho\u1eb7c b\u1ea5t k\u1ef3 v\u1ea5n \u0111\u1ec1 n\u00e0o v\u1edbi Vi\u0301 Medi.</div>');
+                var zaloOpenBtn = document.createElement('a');
+                zaloOpenBtn.href = 'https://zalo.me/0868919790';
+                zaloOpenBtn.target = '_blank';
+                zaloOpenBtn.rel = 'noopener';
+                zaloOpenBtn.textContent = '\ud83d\udcac Nh\u1eafn Zalo ngay';
+                Object.assign(zaloOpenBtn.style, {
+                    display: 'block', width: '100%', marginTop: '12px', padding: '11px',
+                    background: '#1565c0', color: '#fff', textAlign: 'center',
+                    borderRadius: '10px', fontWeight: '800', fontSize: '15px',
+                    textDecoration: 'none', boxSizing: 'border-box',
+                });
+                zaloCard.appendChild(zaloOpenBtn);
+                body.appendChild(zaloCard);
+
+                var warrantyCard = infoCard('#eff6ff', '#bfdbfe', '#1d4ed8', '\ud83d\udee1\ufe0f Ch\u00ednh s\u00e1ch b\u1ea3o h\u00e0nh',
+                    '<ul style="margin:0;padding-left:18px;font-size:14px;color:#374151;line-height:1.8">' +
+                    '<li>H\u1ed7 tr\u1ee3 c\u00e0i \u0111\u1eb7t l\u1ea1i mi\u1ec5n ph\u00ed khi \u0111\u1ed5i m\u00e1y/tr\u00ecnh duy\u1ec7t</li>' +
+                    '<li>Medi \u0111\u00e3 mua kh\u00f4ng h\u1ebft h\u1ea1n, gi\u1eef nguy\u00ean khi n\u00e2ng c\u1ea5p phi\u00ean b\u1ea3n</li>' +
+                    '<li>H\u1ed7 tr\u1ee3 g\u1ee1 kho\u00e1 thi\u1ebft b\u1ecb n\u1ebfu b\u1ecb kho\u00e1 nh\u1ea7m</li>' +
+                    '<li>Ph\u1ea3n h\u1ed3i l\u1ed7i k\u1ef9 thu\u1eadt qua Zalo, x\u1eed l\u00fd trong ng\u00e0y</li>' +
+                    '</ul>');
+                body.appendChild(warrantyCard);
+
+                card.appendChild(body);
+
+                // footer: copyright
+                var footer = document.createElement('div');
+                footer.textContent = 'Copyright \u00a9 Medinet AutoFill. All rights reserved.';
+                Object.assign(footer.style, {
+                    textAlign: 'center', fontSize: '12.5px', color: '#9ca3af',
+                    padding: '0 30px 22px',
+                });
+                card.appendChild(footer);
+
+                overlay.appendChild(card);
+                overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+                document.body.appendChild(overlay);
+            }
+        },
+        {
+            emoji: '\ud83d\udcb0', label: 'Qu\u1ea3n l\u00fd v\u00ed Medi',
+            tier: 'lite',
+            color: '#0d47a1', hoverColor: '#0a3a82',
+            check: function() { return true; },
+            fn: function() {
+                var MODAL_ID = '_mtt_author_modal';
+                if (document.getElementById(MODAL_ID)) {
+                    document.getElementById(MODAL_ID).remove(); return;
+                }
+                var card = document.createElement('div');
+                Object.assign(card.style, {
+                    background: '#fff', borderRadius: '20px',
+                    width: '640px', maxWidth: '94vw',
+                    boxSizing: 'border-box',
+                    boxShadow: '0 25px 60px rgba(0,0,0,0.45)',
+                    position: 'relative', overflow: 'hidden',
+                });
+
+                // header strip
+                var header = document.createElement('div');
+                Object.assign(header.style, {
+                    background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 100%)',
+                    padding: '26px 30px 22px',
+                    display: 'flex', alignItems: 'center', gap: '16px',
+                });
+                var headerIcon = document.createElement('span');
+                headerIcon.textContent = '\ud83d\udcb0';
+                Object.assign(headerIcon.style, { fontSize: '38px', lineHeight: '1' });
+                var headerText = document.createElement('div');
+                var headerTitle = document.createElement('div');
+                headerTitle.textContent = 'Qu\u1ea3n l\u00fd v\u00ed Medi';
+                Object.assign(headerTitle.style, {
+                    fontSize: '24px', fontWeight: '800', color: '#fff', lineHeight: '1.2',
+                });
+                var headerSub = document.createElement('div');
+                headerSub.textContent = 'Medinet AutoFill';
+                Object.assign(headerSub.style, {
+                    fontSize: '14px', color: 'rgba(255,255,255,0.85)', marginTop: '4px', fontWeight: '600',
+                });
+                headerText.appendChild(headerTitle);
+                headerText.appendChild(headerSub);
+                header.appendChild(headerIcon);
+                header.appendChild(headerText);
+                card.appendChild(header);
+
                 // Close button
                 var closeBtn = document.createElement('button');
                 closeBtn.innerHTML = '\u00d7';
                 Object.assign(closeBtn.style, {
-                    position: 'absolute', top: '12px', right: '16px',
-                    background: 'rgba(255,255,255,0.15)', border: 'none',
-                    borderRadius: '50%', width: '28px', height: '28px',
-                    color: '#fff', fontSize: '18px', cursor: 'pointer',
-                    lineHeight: '28px', textAlign: 'center', padding: '0',
+                    position: 'absolute', top: '14px', right: '18px',
+                    background: 'rgba(255,255,255,0.25)', border: 'none',
+                    fontSize: '24px', color: '#fff', cursor: 'pointer',
+                    lineHeight: '1', width: '34px', height: '34px',
+                    borderRadius: '50%', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    fontWeight: '300',
                 });
+                closeBtn.addEventListener('mouseenter', function() { closeBtn.style.background = 'rgba(255,255,255,0.4)'; });
+                closeBtn.addEventListener('mouseleave', function() { closeBtn.style.background = 'rgba(255,255,255,0.25)'; });
                 closeBtn.addEventListener('click', function() { overlay.remove(); });
                 card.appendChild(closeBtn);
-                // Avatar placeholder / icon
-                var icon = document.createElement('div');
-                icon.innerHTML = '\ud83d\udc68\u200d\u2695\ufe0f';
-                Object.assign(icon.style, {
-                    fontSize: '42px', marginBottom: '8px', lineHeight: '1',
-                });
-                card.appendChild(icon);
-                // Name
-                var name = document.createElement('div');
-                name.textContent = 'Medinet AutoFill';
-                Object.assign(name.style, {
-                    fontSize: '26px', fontWeight: '700', letterSpacing: '0.5px',
-                    marginBottom: '4px',
-                    color: '#ffffff',
-                });
-                card.appendChild(name);
-                // Website chinh chu
-                var website = document.createElement('a');
-                website.href = 'https://medinetautofill.github.io/';
-                website.target = '_blank';
-                website.rel = 'noopener';
-                website.textContent = '\ud83c\udf10 medinetautofill.github.io';
-                Object.assign(website.style, {
-                    fontSize: '14px', color: 'rgba(255,255,255,0.85)',
-                    textDecoration: 'none', fontWeight: '600',
-                    display: 'inline-block', marginBottom: '2px',
-                });
-                card.appendChild(website);
-                // Divider
-                var div1 = document.createElement('div');
-                Object.assign(div1.style, {
-                    height: '1px', background: 'rgba(255,255,255,0.15)',
-                    margin: '14px 0',
-                });
-                card.appendChild(div1);
-                // Contact
-                var contact = document.createElement('a');
-                contact.href = 'https://zalo.me/0868919790';
-                contact.target = '_blank';
-                contact.rel = 'noopener';
-                contact.innerHTML =
-                    '<img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" ' +
-                    'alt="Zalo" style="width:18px;height:18px;vertical-align:middle;margin-right:7px">' +
-                    'Zalo 0868.91.97.90';
-                Object.assign(contact.style, {
-                    fontSize: '15px', marginBottom: '10px', color: '#a5b4fc',
-                    textDecoration: 'none', fontWeight: '600', display: 'inline-flex', alignItems: 'center',
-                });
-                card.appendChild(contact);
-                // Copyright
-                var copy = document.createElement('div');
-                copy.textContent = 'Copyright \u00a9 Medinet AutoFill. All rights reserved';
-                Object.assign(copy.style, {
-                    fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px',
-                });
-                card.appendChild(copy);
 
-                // Vi Medi info
+                // body
+                var body = document.createElement('div');
+                Object.assign(body.style, { padding: '26px 30px 28px' });
+
+                // Vi Medi info - 2 cot: So du + Ma may
+                var walletC = getWalletCache();
+                var isPositive = walletC.balance > 0;
                 var licInfoBox = document.createElement('div');
                 Object.assign(licInfoBox.style, {
-                    background: 'rgba(255,255,255,0.1)', borderRadius: '12px',
-                    padding: '14px 16px', marginBottom: '16px', textAlign: 'left',
+                    background: isPositive ? '#ecfdf5' : '#fef2f2',
+                    border: '1.5px solid ' + (isPositive ? '#a7f3d0' : '#fecaca'),
+                    borderRadius: '14px', padding: '20px 22px', marginBottom: '18px',
+                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px',
+                    boxSizing: 'border-box',
                 });
-                var walletC = getWalletCache();
-                var licStatus = walletC.balance > 0
-                    ? ('\ud83d\udfe2 C\u00f2n <b>' + fmtMedi(walletC.balance) + ' Medi</b> (\u2248' + Math.round(walletC.balance * 100) + ' l\u01b0\u1ee3t)')
-                    : '\ud83d\udd34 H\u1ebft Medi / Ch\u01b0a k\u00edch ho\u1ea1t';
-                licInfoBox.innerHTML =
-                    '<div style="font-size:15px;color:rgba(255,255,255,0.7);margin-bottom:8px">\ud83d\udcb0 <b>V\u00ed Medi</b></div>' +
-                    '<div style="font-size:17px;color:#fff;margin-bottom:8px">' + licStatus + '</div>' +
-                    '<div style="font-size:13px;color:rgba(255,255,255,0.5);word-break:break-all">M\u00e3 m\u00e1y: ' + getMachineId() + '</div>';
-                card.appendChild(licInfoBox);
+                var balCol = document.createElement('div');
+                balCol.innerHTML =
+                    '<div style="font-size:12.5px;font-weight:800;color:' + (isPositive ? '#047857' : '#b91c1c') + ';text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' +
+                    (isPositive ? '\ud83d\udfe2 S\u1ed1 d\u01b0 hi\u1ec7n t\u1ea1i' : '\ud83d\udd34 Tr\u1ea1ng th\u00e1i') + '</div>' +
+                    '<div style="font-size:22px;font-weight:800;color:' + (isPositive ? '#065f46' : '#991b1b') + '">' +
+                    (isPositive ? fmtMedi(walletC.balance) + ' Medi' : 'H\u1ebft Medi') + '</div>' +
+                    (isPositive ? '<div style="font-size:13px;color:#374151;margin-top:4px">\u2248 ' + Math.round(walletC.balance * 100) + ' l\u01b0\u1ee3t d\u00f9ng</div>' : '<div style="font-size:13px;color:#7f1d1d;margin-top:4px">Ch\u01b0a k\u00edch ho\u1ea1t / c\u1ea7n n\u1ea1p th\u00eam</div>');
+                var midCol = document.createElement('div');
+                midCol.innerHTML =
+                    '<div style="font-size:12.5px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">\ud83d\udda5\ufe0f M\u00e3 m\u00e1y c\u1ee7a b\u1ea1n</div>' +
+                    '<div style="font-size:16px;font-weight:800;color:#111827;word-break:break-all;font-family:monospace">' + getMachineId() + '</div>' +
+                    '<div style="font-size:12.5px;color:#6b7280;margin-top:4px">D\u00f9ng \u0111\u1ec3 tra c\u1ee9u/b\u1ea3o h\u00e0nh khi c\u1ea7n h\u1ed7 tr\u1ee3</div>';
+                licInfoBox.appendChild(balCol);
+                licInfoBox.appendChild(midCol);
+                body.appendChild(licInfoBox);
 
-                // Button gia han
+                // Button quan ly / nap them
                 var licBtn = document.createElement('button');
-                licBtn.textContent = '\ud83d\udcb0 Qu\u1ea3n l\u00fd V\u00ed Medi';
+                licBtn.textContent = '\ud83d\udcb3 N\u1ea1p / Qu\u1ea3n l\u00fd Medi chi ti\u1ebft';
                 Object.assign(licBtn.style, {
-                    display: 'block', width: '100%', padding: '13px',
-                    background: 'rgba(255,255,255,0.15)', color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px',
-                    fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '16px',
+                    display: 'block', width: '100%', padding: '15px',
+                    background: '#0d47a1', color: '#fff',
+                    border: 'none', borderRadius: '12px',
+                    fontSize: '16px', fontWeight: '800', cursor: 'pointer',
+                    letterSpacing: '.3px',
                 });
+                licBtn.addEventListener('mouseenter', function() { licBtn.style.background = '#0a3a82'; });
+                licBtn.addEventListener('mouseleave', function() { licBtn.style.background = '#0d47a1'; });
                 licBtn.addEventListener('click', function() {
-                    // Dong popup nay, mo popup license
                     var authModal = document.getElementById('_mtt_author_modal');
                     if (authModal) authModal.remove();
                     showLicenseExpiredPopup();
                 });
-                card.appendChild(licBtn);
+                body.appendChild(licBtn);
+
+                card.appendChild(body);
                 overlay.appendChild(card);
-                // Close on overlay click
-                overlay.addEventListener('click', function(e) {
-                    if (e.target === overlay) overlay.remove();
-                });
+                overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
                 document.body.appendChild(overlay);
             }
         }
