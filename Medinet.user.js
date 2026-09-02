@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      11.0
+// @version      11.1
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi + O to + Nguoi lai xe)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -1795,16 +1795,16 @@
             emoji: '\ud83d\udcdd', label: 'Kh\u00e1m l\u00e2m s\u00e0ng ng\u01b0\u1eddi >18 tu\u1ed5i (M3)',
             tier: 'lite',
             color: '#2e7d32', hoverColor: '#1b5e20',
-            // Kha dung khi URL chua "KSKDK_ThongTinKham" (trang M13)
+            // Kha dung khi URL chua "KSKDK_ThongTinKham" (trang M3 - Nguoi tu du 18-59 tuoi, Kham dinh ky)
             check: function() {
                 return window.location.href.indexOf('KSKDK_ThongTinKham') !== -1;
             },
             selfBills: true, // bill theo count thuc te
             fn: function() {
-                // Dong bo logic voi "Thong tin kham NCT binh thuong (M14)":
+                // Dong bo logic voi "Thong tin kham NCT binh thuong (M4)":
                 // resetAll -> tick toan bo "Chua phat hien bat thuong" -> chon
                 // "Loai I" toan bo -> dien so TMH mac dinh. Khong tu dien thi
-                // luc (Mat_KhongKinh) nua de giong M14.
+                // luc (Mat_KhongKinh) nua de giong M4.
                 var total = resetAll();
                 setTimeout(function() {
                     total += tickAllChuaPhatHien([]);
@@ -2398,7 +2398,7 @@
             check: function() {
                 // Chi kha dung tren trang "KSK Viec lam + Lai xe"
                 // (nav_group/kskdk_thongtinkhamtren18/...), khong hien o cac
-                // trang khac (M13, NCT, ...) du co cac truong PhanLoai trung ten.
+                // trang khac (M3, NCT, ...) du co cac truong PhanLoai trung ten.
                 if (window.location.href.indexOf('kskdk_thongtinkhamtren18') === -1) return false;
                 return !!document.querySelector('.TuanHoan_PhanLoai') ||
                        !!document.querySelector('.Mat_PhanLoai') ||
@@ -2410,10 +2410,10 @@
             }
         },
         {
-            emoji: '\ud83d\udc66', label: 'Kh\u00e1m l\u00e2m s\u00e0ng 6-18 tu\u1ed5i kh\u00f4ng \u0111i h\u1ecdc (M12)',
+            emoji: '\ud83d\udc66', label: 'Kh\u00e1m l\u00e2m s\u00e0ng 6-17 tu\u1ed5i kh\u00f4ng \u0111i h\u1ecdc (M2)',
             tier: 'lite',
             color: '#e65100', hoverColor: '#bf360c',
-            // Kha dung tren trang KSKD18_ThongTinKham (M12)
+            // Kha dung tren trang KSKD18_ThongTinKham (M2 - Tre tu 6-17 tuoi)
             check: function() {
                 return window.location.href.indexOf('KSKD18_ThongTinKham') !== -1;
             },
@@ -2442,7 +2442,7 @@
                     if (setNumberField('Mat_KhongKinh_MP', '10')) total++;
                     if (setNumberField('Mat_KhongKinh_MT', '10')) total++;
                     total += fillCommonNumbers();
-                    showToast('\u2705 \u0110\u00e3 t\u00edch Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng to\u00e0n b\u1ed9 (M12)');
+                    showToast('\u2705 \u0110\u00e3 t\u00edch Ch\u01b0a ph\u00e1t hi\u1ec7n b\u1ea5t th\u01b0\u1eddng to\u00e0n b\u1ed9 (M2)');
                     spendCredits(total);
                 }, 300);
             }
@@ -3020,11 +3020,107 @@
         return d + '-' + m + '-' + y;
     }
 
+    // ================================================================
+    //  DIEU KHOAN SU DUNG - hien DUY NHAT 1 LAN (ngay lan dau bam Dung
+    //  thu/Mua sau khi cai script), truoc khi cho mo popup Vi Medi. Da
+    //  dong y roi thi GM_setValue co danh dau lai, tu lan sau tro di se
+    //  khong hien popup nay nua. Noi dung co dong lai tu phan "Luu y
+    //  quan trong" + gia/chinh sach trong index.html quang cao.
+    // ================================================================
+    var TOS_ACCEPTED_KEY = '_mtt_tos_accepted_v1';
+    function showTermsPopup(onAccepted) {
+        try {
+            if (GM_getValue(TOS_ACCEPTED_KEY, false)) { onAccepted(); return; }
+        } catch (e) { onAccepted(); return; }
+
+        var POPUP_ID = '_mtt_tos_popup';
+        if (document.getElementById(POPUP_ID)) return;
+
+        var overlay = document.createElement('div');
+        overlay.id = POPUP_ID;
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', zIndex: '999999999',
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Segoe UI, Arial, sans-serif',
+            backdropFilter: 'blur(5px)',
+        });
+
+        var card = document.createElement('div');
+        Object.assign(card.style, {
+            background: '#fff', borderRadius: '18px',
+            padding: '26px 26px 22px', maxWidth: '440px', width: '92vw',
+            maxHeight: '88vh', overflowY: 'auto',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+            boxSizing: 'border-box',
+        });
+
+        var titleEl = document.createElement('div');
+        titleEl.innerHTML = '\ud83d\udcdd <b>\u0110i\u1ec1u kho\u1ea3n s\u1eed d\u1ee5ng</b>';
+        Object.assign(titleEl.style, { fontSize: '19px', color: '#0d47a1', marginBottom: '12px' });
+        card.appendChild(titleEl);
+
+        var body = document.createElement('div');
+        Object.assign(body.style, { fontSize: '13.5px', color: '#374151', lineHeight: '1.7', textAlign: 'left' });
+        body.innerHTML =
+            '<ul style="margin:0 0 12px;padding-left:18px">' +
+            '<li>Medinet AutoFill ch\u1ec9 h\u1ed7 tr\u1ee3 <b>\u0111i\u1ec1n nhanh</b> gi\u00e1 tr\u1ecb th\u00f4ng th\u01b0\u1eddng, <b>kh\u00f4ng kh\u00e1m b\u1ec7nh</b> v\u00e0 kh\u00f4ng bi\u1ebft k\u1ebft qu\u1ea3 th\u1ef1c t\u1ebf.</li>' +
+            '<li>Sau khi d\u00f9ng "Thao t\u00e1c nhanh", b\u1ea1n <b>b\u1eaft bu\u1ed9c ki\u1ec3m tra, ch\u1ec9nh l\u1ea1i</b> to\u00e0n b\u1ed9 s\u1ed1 li\u1ec7u cho \u0111\u00fang v\u1edbi Phi\u1ebfu kh\u00e1m th\u1eadt do b\u00e1c s\u0129 x\u00e1c nh\u1eadn tr\u01b0\u1edbc khi l\u01b0u h\u1ed3 s\u01a1.</li>' +
+            '<li>B\u1ea1n t\u1ef1 ch\u1ecbu tr\u00e1ch nhi\u1ec7m v\u1ec1 t\u00ednh ch\u00ednh x\u00e1c c\u1ee7a d\u1eef li\u1ec7u \u0111\u00e3 nh\u1eadp; t\u00e1c gi\u1ea3 kh\u00f4ng ch\u1ecbu tr\u00e1ch nhi\u1ec7m v\u1edbi h\u1eadu qu\u1ea3 ph\u00e1p l\u00fd/y khoa ph\u00e1t sinh do kh\u00f4ng ki\u1ec3m tra l\u1ea1i.</li>' +
+            '<li>D\u00f9ng th\u1eed: t\u1eb7ng 5 Medi mi\u1ec5n ph\u00ed, <b>ch\u1ec9 1 l\u1ea7n/m\u00e1y</b>. Medi \u0111\u00e3 mua <b>kh\u00f4ng h\u1ebft h\u1ea1n</b> nh\u01b0ng <b>kh\u00f4ng ho\u00e0n ti\u1ec1n</b> sau khi \u0111\u00e3 n\u1ea1p/s\u1eed d\u1ee5ng.</li>' +
+            '<li>M\u00e3 m\u00e1y g\u1eafn v\u1edbi 1 thi\u1ebft b\u1ecb; kh\u00f4ng chia s\u1ebb/can thi\u1ec7p k\u1ef9 thu\u1eadt \u0111\u1ec3 gian l\u1eadn s\u1ed1 d\u01b0 hay d\u00f9ng thu\u0301 nhi\u1ec1u l\u1ea7n.</li>' +
+            '</ul>';
+        card.appendChild(body);
+
+        var checkLabel = document.createElement('label');
+        Object.assign(checkLabel.style, {
+            display: 'flex', alignItems: 'center', gap: '8px',
+            fontSize: '13.5px', color: '#1f2937', fontWeight: '700',
+            margin: '4px 0 16px', cursor: 'pointer', userSelect: 'none',
+        });
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        Object.assign(checkbox.style, { width: '17px', height: '17px', cursor: 'pointer', flexShrink: '0' });
+        checkLabel.appendChild(checkbox);
+        checkLabel.appendChild(document.createTextNode('T\u00f4i \u0111\u00e3 \u0111\u1ecdc v\u00e0 \u0111\u1ed3ng \u00fd v\u1edbi \u0111i\u1ec1u kho\u1ea3n s\u1eed d\u1ee5ng tr\u00ean'));
+        card.appendChild(checkLabel);
+
+        var okBtn = document.createElement('button');
+        okBtn.textContent = 'OK, ti\u1ebfp t\u1ee5c';
+        Object.assign(okBtn.style, {
+            width: '100%', padding: '13px', border: 'none', borderRadius: '10px',
+            fontSize: '15px', fontWeight: '800', color: '#fff',
+            background: '#c8c8c8', cursor: 'not-allowed', transition: 'background .15s',
+        });
+        okBtn.disabled = true;
+        checkbox.onchange = function() {
+            okBtn.disabled = !checkbox.checked;
+            okBtn.style.background = checkbox.checked ? '#1565c0' : '#c8c8c8';
+            okBtn.style.cursor = checkbox.checked ? 'pointer' : 'not-allowed';
+        };
+        okBtn.onclick = function() {
+            if (!checkbox.checked) return;
+            try { GM_setValue(TOS_ACCEPTED_KEY, true); } catch (e) {}
+            overlay.remove();
+            onAccepted();
+        };
+        card.appendChild(okBtn);
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+    }
+
     // Popup Vi Medi (thay cho popup nhap ma license cu) - hien so du,
     // nut dung thu, huong dan nap them. Dung chung cho ca truong hop
     // chua kich hoat / het Medi (bam vao 1 muc Thao tac nhanh khi
     // balance = 0 se mo popup nay).
     function showLicenseExpiredPopup(forceTitle) {
+        var POPUP_ID = '_mtt_license_popup';
+        if (document.getElementById(POPUP_ID)) return;
+        showTermsPopup(function() { _renderWalletPopup(forceTitle); });
+    }
+
+    function _renderWalletPopup(forceTitle) {
         var POPUP_ID = '_mtt_license_popup';
         if (document.getElementById(POPUP_ID)) return;
 
@@ -4580,12 +4676,16 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
-    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M14)
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M4 - NCT)
     //  - Chon Loai I  => tick "Chua phat hien" + xoa ICD
     //  - Tick "Chua phat hien" => chon Loai I + xoa ICD
     //  - Bo tick "Chua phat hien" => bo chon Loai I (tat ca radio)
     //  - Chon Loai II..V => bo tick "Chua phat hien" + xoa ICD
     // ================================================================
+    // Luu y: ten bien/ham ben duoi (M14_SPECIALTIES, setupM14Sync...) la
+    // dinh danh NOI BO con lai tu he thong so M cu, KHONG doi de tranh
+    // rui ro sai sot tham chieu - chi nhan M hien thi cho nguoi dung (label
+    // nut, showToast) va comment mo ta moi duoc cap nhat theo M4/M3 hien tai.
     var M14_SPECIALTIES = [
         { radio: 'NoiKhoa_PhanLoai',  cb: 'NoiKhoa_ChuaPhatHienBatThuong',  icds: ['NoiKhoa_ChanDoanSoBo_ICD',  'NoiKhoa_ChanDoanXacDinh_ICD']  },
         { radio: 'NgoaiKhoa_PhanLoai', cb: 'NgoaiKhoa_ChuaPhatHienBatThuong', icds: ['NgoaiKhoa_ChanDoanSoBo_ICD', 'NgoaiKhoa_ChanDoanXacDinh_ICD'] },
@@ -4702,9 +4802,9 @@
     m14SyncObserver.observe(document.body, { childList: true, subtree: true });
 
     // ================================================================
-    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M13)
-    //  Giong het co che M14 nhung danh cho trang KSKDK_ThongTinKham
-    //  va cac chuyen khoa tuong ung cua phieu nguoi >18 tuoi.
+    //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong" (M3 - 18-59 tuoi)
+    //  Giong het co che M4 (NCT) nhung danh cho trang KSKDK_ThongTinKham
+    //  va cac chuyen khoa tuong ung cua phieu nguoi 18-59 tuoi.
     // ================================================================
     var M13_SPECIALTIES = [
         { radio: 'NoiKhoa_PhanLoai',     cb: 'NoiKhoa_ChuaPhatHienBatThuong',     icds: ['NoiKhoa_ChanDoanSoBo_ICD',     'NoiKhoa_ChanDoanXacDinh_ICD']     },
@@ -4831,13 +4931,13 @@
     // ================================================================
     //  DONG BO 2 CHIEU: "Loai I" <-> "Chua phat hien bat thuong"
     //  KSK Viec lam + Lai xe (kskdk_thongtinkhamtren18 - KSKT18_ThongTinKham)
-    //  Cau truc chuyen khoa khac M13: muc "Noi khoa" duoc tach rieng thanh
+    //  Cau truc chuyen khoa khac M3: muc "Noi khoa" duoc tach rieng thanh
     //  7 nhom nho (Tuan hoan, Ho hap, Tieu hoa, Than-Tiet nieu, Noi tiet,
     //  Co-xuong-khop, Than kinh) thay vi 1 nhom "Noi khoa" gop chung, nen
     //  KHONG the tai su dung nguyen M13_SPECIALTIES (thieu "Tuan hoan" va
     //  co du "Noi khoa" khong ton tai tren trang nay).
-    //  Dung chung cac ham xu ly chung voi M13 (m13GetSelectedLabel,
-    //  m13SyncFromRadio, m13SyncFromCheckbox) vi logic giong hoan toan M14.
+    //  Dung chung cac ham xu ly chung voi M3 (m13GetSelectedLabel,
+    //  m13SyncFromRadio, m13SyncFromCheckbox) vi logic giong hoan toan M4.
     // ================================================================
     var VL_SPECIALTIES = [
         { radio: 'TuanHoan_PhanLoai',     cb: 'TuanHoan_ChuaPhatHienBatThuong',     icds: ['TuanHoan_ChanDoanSoBo_ICD',     'TuanHoan_ChanDoanXacDinh_ICD']     },
