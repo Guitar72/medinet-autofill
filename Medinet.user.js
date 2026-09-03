@@ -14,6 +14,11 @@
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js
 // ==/UserScript==
 
+// ==Changelog==
+// 12.3 | 2026-09-03 | Sua loi tru du medi khi bam lai nut tren trang da dien (Tien su kham thuc the, Thong tin hanh chinh, M2) • Khong tinh phi khi thao tac khong tim thay muc de chon
+// 12.2 | 2026-09-03 | Sua loi tru du khi tick checkbox/radio/o so da dien san • Sua loi so du hien thi sai (vot len) sau khi F5 do request tru medi bi huy khi chuyen trang
+// ==/Changelog==
+
 (function () {
     'use strict';
 
