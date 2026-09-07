@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      12.3
+// @version      12.4
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi + O to + Nguoi lai xe)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
+// @icon         https://quanlyskcd.medinet.org.vn/favicon.ico
+// @run-at       document-idle
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @grant        GM_setValue
@@ -12,11 +14,14 @@
 // @grant        unsafeWindow
 // @updateURL    https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Guitar72/medinet-autofill/refs/heads/main/Medinet.user.js
+// @supportURL   https://zalo.me/0868919790
+// @homepageURL  https://medinetautofill.github.io
 // ==/UserScript==
 
 // ==Changelog==
-// 12.3 | 2026-09-03 | Sua loi tru du medi khi bam lai nut tren trang da dien (Tien su kham thuc the, Thong tin hanh chinh, M2) • Khong tinh phi khi thao tac khong tim thay muc de chon
-// 12.2 | 2026-09-03 | Sua loi tru du khi tick checkbox/radio/o so da dien san • Sua loi so du hien thi sai (vot len) sau khi F5 do request tru medi bi huy khi chuyen trang
+// 12.4 | 2026-09-07 | Popup Ví Medi: bắt buộc cả Số điện thoại Zalo và Tên mới mở khoá chọn mức nạp (bỏ ô Zalo riêng) • Thêm nút phóng to QR khi rê chuột, bấm để xem QR to hơn
+// 12.3 | 2026-09-03 | Sửa lỗi trừ dư Medi khi bấm lại nút trên trang đã điền (Tiền sử khám thực thể, Thông tin hành chính, M2) • Không tính phí khi thao tác không tìm thấy mục để chọn
+// 12.2 | 2026-09-03 | Sửa lỗi trừ dư khi tick checkbox/radio/ô số đã điền sẵn • Sửa lỗi số dư hiển thị sai (vọt lên) sau khi F5 do request trừ Medi bị huỷ khi chuyển trang
 // ==/Changelog==
 
 (function () {
@@ -3803,6 +3808,10 @@
             textAlign: 'center', position: 'relative', boxSizing: 'border-box',
         });
 
+        // Tham chieu toi overlay phong to QR (gan gia tri o doan tao QR ben
+        // duoi) - de don dep khoi body khi dong popup Vi Medi.
+        var qrZoomOverlayRef;
+
         // Nut dong
         var closeX = document.createElement('button');
         closeX.textContent = '\u00d7';
@@ -3811,7 +3820,7 @@
             background: 'none', border: 'none', fontSize: '24px',
             cursor: 'pointer', color: '#bbb', lineHeight: '1', padding: '0',
         });
-        closeX.onclick = function() { overlay.remove(); };
+        closeX.onclick = function() { overlay.remove(); if (qrZoomOverlayRef) qrZoomOverlayRef.remove(); };
         card.appendChild(closeX);
 
         // Icon + tieu de
@@ -3966,10 +3975,9 @@
             textAlign: 'left', border: '1px solid #ffe082',
         });
         contactBox.innerHTML =
-            '<div style="font-size:12.5px;color:#6d4c00;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">\ud83d\udcde Th\u00f4ng tin li\u00ean h\u1ec7 (\u0111\u1ec3 h\u1ed7 tr\u1ee3/b\u1ea3o h\u00e0nh sau n\u00e0y)</div>' +
-            '<input id="_mtt_contact_phone" type="tel" placeholder="S\u1ed1 \u0111i\u1ec7n tho\u1ea1i (b\u1eaft bu\u1ed9c \u0111\u1ec3 t\u1ea1o QR)" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px;margin-bottom:8px" value="' + (savedContact.phone || '').replace(/"/g, '') + '">' +
-            '<input id="_mtt_contact_name" type="text" placeholder="T\u00ean c\u1ee7a b\u1ea1n (kh\u00f4ng b\u1eaft bu\u1ed9c)" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px;margin-bottom:8px" value="' + (savedContact.name || '').replace(/"/g, '') + '">' +
-            '<input id="_mtt_contact_zalo" type="text" placeholder="Zalo (n\u1ebfu kh\u00e1c SDT, kh\u00f4ng b\u1eaft bu\u1ed9c)" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px" value="' + (savedContact.zalo || '').replace(/"/g, '') + '">' +
+            '<div style="font-size:12.5px;color:#6d4c00;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">\ud83d\udcde Th\u00f4ng tin li\u00ean h\u1ec7 (b\u1eaft bu\u1ed9c, \u0111\u1ec3 h\u1ed7 tr\u1ee3/b\u1ea3o h\u00e0nh sau n\u00e0y)</div>' +
+            '<input id="_mtt_contact_phone" type="tel" placeholder="S\u1ed1 \u0111i\u1ec7n tho\u1ea1i Zalo" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px;margin-bottom:8px" value="' + (savedContact.phone || '').replace(/"/g, '') + '">' +
+            '<input id="_mtt_contact_name" type="text" placeholder="T\u00ean c\u1ee7a b\u1ea1n" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #e0c896;border-radius:8px;font-size:14px" value="' + (savedContact.name || '').replace(/"/g, '') + '">' +
             '<div id="_mtt_contact_hint" style="font-size:12px;color:#e65100;margin-top:8px;line-height:1.6"></div>';
         card.appendChild(contactBox);
 
@@ -4027,11 +4035,11 @@
         // co san lien lac tra cuu.
         // ================================================================
         function isPhoneValid(v) { return /^[0-9+ ]{8,15}$/.test((v || '').trim()); }
+        function isNameValid(v) { return (v || '').trim().length >= 2; }
         function getContactValues() {
             return {
                 phone: (document.getElementById('_mtt_contact_phone') || {}).value || '',
                 name: (document.getElementById('_mtt_contact_name') || {}).value || '',
-                zalo: (document.getElementById('_mtt_contact_zalo') || {}).value || '',
             };
         }
         function setChipsEnabled(enabled) {
@@ -4044,9 +4052,9 @@
         function syncContactState() {
             var c = getContactValues();
             var hintEl = document.getElementById('_mtt_contact_hint');
-            var ok = isPhoneValid(c.phone);
+            var ok = isPhoneValid(c.phone) && isNameValid(c.name);
             if (hintEl) {
-                hintEl.textContent = ok ? '' : 'Nh\u1eadp S\u1ed1 \u0111i\u1ec7n tho\u1ea1i \u0111\u1ec3 t\u1ea1o m\u00e3 QR (b\u1eaft bu\u1ed9c, gi\u00fap h\u1ed7 tr\u1ee3/b\u1ea3o h\u00e0nh sau n\u00e0y).';
+                hintEl.textContent = ok ? '' : 'Nh\u1eadp \u0111\u1ea7y \u0111\u1ee7 S\u1ed1 \u0111i\u1ec7n tho\u1ea1i Zalo v\u00e0 T\u00ean \u0111\u1ec3 t\u1ea1o m\u00e3 QR (b\u1eaft bu\u1ed9c, gi\u00fap h\u1ed7 tr\u1ee3/b\u1ea3o h\u00e0nh sau n\u00e0y).';
             }
             setChipsEnabled(ok);
             try { GM_setValue(CONTACT_STORE_KEY, JSON.stringify(c)); } catch (e) {}
@@ -4055,14 +4063,14 @@
                 fetch(WALLET_API + '/customer/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mid: mid, phone: c.phone.trim(), name: c.name.trim(), zalo: c.zalo.trim() }),
+                    body: JSON.stringify({ mid: mid, phone: c.phone.trim(), name: c.name.trim() }),
                 }).catch(function() { /* khong chan trai nghiem neu loi mang, se thu lai lan sua tiep theo */ });
                 if (typeof reportPendingOrder === 'function') reportPendingOrder(currentQrAmt);
             }
             return ok;
         }
         setTimeout(function() {
-            ['_mtt_contact_phone', '_mtt_contact_name', '_mtt_contact_zalo'].forEach(function(id) {
+            ['_mtt_contact_phone', '_mtt_contact_name'].forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) { el.addEventListener('input', syncContactState); el.addEventListener('blur', syncContactState); }
             });
@@ -4125,14 +4133,61 @@
             background: '#fff', border: '1.5px solid #a5d6a7', borderRadius: '12px',
             padding: '14px', marginBottom: '10px', textAlign: 'center',
         });
+        // Khung boc anh QR + nut phong to (hien khi ho chuot vao, bam de
+        // xem QR co lon hon trong overlay toan man hinh - de quet hon).
+        var qrImgWrap = document.createElement('div');
+        Object.assign(qrImgWrap.style, {
+            position: 'relative', width: '190px', margin: '0 auto',
+        });
         Object.assign(qrImgEl.style, {
             width: '190px', height: '190px', borderRadius: '8px', display: 'block', margin: '0 auto',
+            border: '1px solid #e0e0e0',
         });
         qrImgEl.alt = 'QR chuy\u1ec3n kho\u1ea3n';
         renderQrImg();
-        qrBox.appendChild(qrImgEl);
+
+        var qrZoomBtn = document.createElement('button');
+        qrZoomBtn.type = 'button';
+        qrZoomBtn.title = 'Ph\u00f3ng to QR';
+        qrZoomBtn.textContent = '\ud83d\udd0d';
+        Object.assign(qrZoomBtn.style, {
+            position: 'absolute', right: '4px', bottom: '4px', width: '30px', height: '30px',
+            borderRadius: '8px', border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff',
+            cursor: 'pointer', fontSize: '15px', opacity: '0', transition: 'opacity .15s',
+        });
+        qrImgWrap.addEventListener('mouseenter', function() { qrZoomBtn.style.opacity = '1'; });
+        qrImgWrap.addEventListener('mouseleave', function() { qrZoomBtn.style.opacity = '0'; });
+
+        // Overlay toan man hinh hien QR co lon (gan vao body de khong bi
+        // cat boi khung popup Vi Medi).
+        var qrZoomOverlay = document.createElement('div');
+        Object.assign(qrZoomOverlay.style, {
+            display: 'none', position: 'fixed', inset: '0', background: 'rgba(0,0,0,.82)',
+            zIndex: '2147483647', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out',
+        });
+        var qrZoomImg = document.createElement('img');
+        qrZoomImg.alt = 'QR chuy\u1ec3n kho\u1ea3n ph\u00f3ng to';
+        Object.assign(qrZoomImg.style, {
+            width: 'min(88vw,420px)', height: 'min(88vw,420px)', borderRadius: '16px',
+            background: '#fff', padding: '14px', boxShadow: '0 30px 60px -20px rgba(0,0,0,.6)',
+        });
+        qrZoomOverlay.appendChild(qrZoomImg);
+        qrZoomOverlay.addEventListener('click', function() { qrZoomOverlay.style.display = 'none'; });
+        document.body.appendChild(qrZoomOverlay);
+        qrZoomOverlayRef = qrZoomOverlay;
+        function openQrZoom() {
+            qrZoomImg.src = qrImgEl.src;
+            qrZoomOverlay.style.display = 'flex';
+        }
+        qrZoomBtn.addEventListener('click', function(e) { e.stopPropagation(); openQrZoom(); });
+        qrImgEl.style.cursor = 'zoom-in';
+        qrImgEl.addEventListener('click', openQrZoom);
+
+        qrImgWrap.appendChild(qrImgEl);
+        qrImgWrap.appendChild(qrZoomBtn);
+        qrBox.appendChild(qrImgWrap);
         var qrNote = document.createElement('div');
-        qrNote.textContent = '\ud83d\udcf1 M\u1edf app ng\u00e2n h\u00e0ng \u2192 qu\u00e9t m\u00e3 n\u00e0y \u2014 s\u1ed1 ti\u1ec1n & n\u1ed9i dung M\u00e3 m\u00e1y \u0111\u01b0\u1ee3c \u0111i\u1ec1n s\u1eb5n, kh\u00f4ng c\u1ea7n g\u00f5 tay';
+        qrNote.textContent = '\ud83d\udcf1 M\u1edf app ng\u00e2n h\u00e0ng \u2192 qu\u00e9t m\u00e3 n\u00e0y \u2014 s\u1ed1 ti\u1ec1n & n\u1ed9i dung M\u00e3 m\u00e1y \u0111\u01b0\u1ee3c \u0111i\u1ec1n s\u1eb5n, kh\u00f4ng c\u1ea7n g\u00f5 tay. Rê chuột và bấm 🔍 để xem QR to hơn.';
         Object.assign(qrNote.style, {
             fontSize: '12.5px', color: '#2e7d32', marginTop: '10px', lineHeight: '1.6', fontWeight: '600',
         });
