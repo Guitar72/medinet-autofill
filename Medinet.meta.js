@@ -19,6 +19,7 @@
 // ==/UserScript==
 
 // ==Changelog==
+// 12.5 | 2026-09-28 | Thêm mục "Upload Excel — Điền Cận lâm sàng theo CCCD"
 // 12.4 | 2026-09-07 | Popup Ví Medi: bắt buộc cả Số điện thoại Zalo và Tên mới mở khoá chọn mức nạp (bỏ ô Zalo riêng) • Thêm nút phóng to QR khi rê chuột, bấm để xem QR to hơn
 // 12.3 | 2026-09-03 | Sửa lỗi trừ dư Medi khi bấm lại nút trên trang đã điền (Tiền sử khám thực thể, Thông tin hành chính, M2) • Không tính phí khi thao tác không tìm thấy mục để chọn
 // 12.2 | 2026-09-03 | Sửa lỗi trừ dư khi tick checkbox/radio/ô số đã điền sẵn • Sửa lỗi số dư hiển thị sai (vọt lên) sau khi F5 do request trừ Medi bị huỷ khi chuyển trang
