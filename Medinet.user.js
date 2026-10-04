@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Medinet
 // @namespace    http://tampermonkey.net/
-// @version      12.5
+// @version      14.21
 // @description  Nut Thao Tac Nhanh (KSK nguoi lon + Tre em duoi 6 tuoi + O to + Nguoi lai xe)
 // @author       Auto-generated
 // @match        https://quanlyskcd.medinet.org.vn/*
@@ -20,14 +20,94 @@
 // ==/UserScript==
 
 // ==Changelog==
-// 12.5 | 2026-09-28 | Thêm mục "Upload Excel — Điền Cận lâm sàng theo CCCD"
-// 12.4 | 2026-09-07 | Popup Ví Medi: bắt buộc cả Số điện thoại Zalo và Tên mới mở khoá chọn mức nạp (bỏ ô Zalo riêng) • Thêm nút phóng to QR khi rê chuột, bấm để xem QR to hơn
-// 12.3 | 2026-09-03 | Sửa lỗi trừ dư Medi khi bấm lại nút trên trang đã điền (Tiền sử khám thực thể, Thông tin hành chính, M2) • Không tính phí khi thao tác không tìm thấy mục để chọn
-// 12.2 | 2026-09-03 | Sửa lỗi trừ dư khi tick checkbox/radio/ô số đã điền sẵn • Sửa lỗi số dư hiển thị sai (vọt lên) sau khi F5 do request trừ Medi bị huỷ khi chuyển trang
-// ==/Changelog==
-
+// 14.21 | 2026-10-01 | Chế độ hàng loạt: TẠM KHÓA vì chưa hoàn chỉnh - nút đổi tên "Chế độ hàng loạt (đang phát triển)", làm mờ, không bấm được; khi cần mở lại chỉ đổi BATCH_ENABLED = true
+// 14.20 | 2026-09-30 | CO DINH Ma may: luu MID ben vung (GM + localStorage), khong tinh lai moi lan; tu khoi phuc MID cu tu cache vi; sao luu Device Secret. Thuat toan van tay cu GIU NGUYEN de khong doi MID khach hien tai
+// 14.19 | 2026-09-30 | Chế độ hàng loạt: hộp thoại hiển thị phụ thu theo Medi (0.3 Medi/người khi Lưu tay, 0.5 Medi/người khi tự động Lưu) thay vì theo lượt — mức phí thực tế không đổi
+// 14.18 | 2026-09-30 | Chế độ hàng loạt: hộp thoại bắt đầu có 3 chế độ CHỌN 1 (không bật cùng lúc): "Bấm Lưu tay" (mặc định) • "Tự động bấm Lưu sau khi điền, dừng lại khi lỗi" (lưu lỗi/không xác nhận được thì dừng tại người đó) • "Tự động hàng loạt, bỏ qua lỗi" (lưu lỗi thì ghi log "Lỗi: chưa lưu được" rồi chạy tiếp người sau, bạn sửa tay sau khi chạy xong và xuất log Excel) • Thanh trạng thái hiện chế độ đang chạy; hộp thoại kết thúc nhắc số người cần sửa tay
+// 14.17 | 2026-09-30 | Chế độ hàng loạt: CHỈ CHUYỂN NGƯỜI KHI CHẮC CHẮN ĐÃ LƯU - sau khi bấm Lưu (tự bấm hoặc bấm tay) script chờ Medinet báo lưu thành công (thông báo/hộp thoại) và không có lỗi/ô chưa hợp lệ mới ghi "Thành công" và chuyển tiếp • Lưu chưa xác nhận được (lỗi validate, không thấy thông báo, trang tải lại): DỪNG tại người đó, hiện lý do trên thanh trạng thái, bạn sửa rồi bấm Lưu lại, hoặc bấm "Đã lưu — chuyển tiếp" nếu thấy Medinet đã lưu, hoặc "Bỏ qua người này" (log ghi "Lỗi: chưa lưu được") • Sửa lỗi điền lại + tính phí lặp mỗi ~2 giây trong lúc chờ Lưu (giờ có trạng thái riêng sau khi điền) • Không điền được ô nào thì không Lưu, bỏ qua người đó
+// 14.16 | 2026-09-30 | Chế độ hàng loạt: CHỐNG TRÙNG - dòng trùng CCCD trong file Excel chỉ xử lý 1 lần (các dòng sau ghi "Bỏ qua: trùng CCCD" trong log) • Nhớ người đã điền THÀNH CÔNG (lưu 7 ngày) để lần chạy sau/chạy lại cùng file tự bỏ qua, không điền lại và không tốn Medi; có ô tích để bỏ chức năng này và nút xóa danh sách đã điền • Đổi tên nút "Autofill Data XN" thành "Điền kết quả CLS", nút "Auto Search" thành "Chế độ hàng loạt"
+// 14.15 | 2026-09-30 | Khung "THONG TIN DOI TUONG KHAM" (Ho ten, CCCD, Ngay sinh, Gioi tinh) tren trang Kham can lam sang NGUOI CAO TUOI: CCCD doc NGAM qua iframe an trang Thong tin hanh chinh (khong chuyen tab; that bai 30s thi quay ve cach bam tab Ket luan), ghi nho theo cdId; ho ten/gioi tinh/nam sinh lay tu Excel theo CCCD, ngay sinh lay tu Medinet, canh bao do neu lech ten/nam sinh. Doc Excel THEO TIEU DE COT (doi cho/chen cot van dung, thieu cot se bao ro). Reset CCCD khi doi benh nhan (cdId). Bo cach bam tab Ket luan
+// 14.10 | 2026-09-29 | Sua loi Auto Search dung im o o Dinh danh ca nhan (0 thanh cong): them fullClick (pointerdown+mousedown+click) truoc khi go CCCD - o nay can duoc "bam vao" that su moi nhan gia tri qua script; xac nhan gia tri da vao o dung roi moi bam Enter + bam luon nut Xem (fullClick), phan biet ro loi "khong go duoc vao o" voi loi "go duoc nhung tim khong ra ket qua" de de chan doan
+// 14.9 | 2026-09-29 | Auto Search: cho ket qua tim kiem, gio BAT BUOC kiem tra dung so CCCD hien tren dong ket qua trung voi CCCD dang tim (khong chi thay-co-dong-la-vao) - tranh truong hop bam vao dong ket qua cu con sot lai cua nguoi truoc khi bang chua kip cap nhat
+// 14.8 | 2026-09-29 | Sua loi tu doc CCCD (Ket luan <-> Kham can lam sang) LAP LAI moi ~10-15s khong ngung do cache het han: gio CHI TU CHAY 1 LAN cho moi lan tai trang, cache giu nguyen suot vong doi trang (khong con het han), khong tu bam lai nua sau khi da thu (thanh cong hay that bai)
+// 14.7 | 2026-09-29 | Trang Kham can lam sang cua NGUOI CAO TUOI khong hien CCCD nen script khong doc duoc (loi "Khong doc duoc CCCD"). Tu dong xu ly ngam: khi phat hien thieu CCCD, tu bam sang tab Ket luan de doc CCCD roi tu bam quay lai Kham can lam sang, khong can nguoi dung thao tac. Ap dung cho ca nut Autofill Data XN, dien tu dong, va Auto Search
+// 14.6 | 2026-09-29 | Auto Search: khi tim khong ra ket qua (co the nguoi nhap lieu da xep benh nhan sang nhom tuoi con lai), TU DONG thu lai 1 lan o danh sach nhom doi dien truoc khi bo qua han, khong can nguoi dung tu kiem tra thu cong
+// 14.5 | 2026-09-29 | Auto Search: BO hop thoai hoi nhom tuoi - vi 1 file Excel co the lan lon ca 2 doi tuong, script TU DOC nam sinh tung dong (cot Tuoi) de xep dung nguoi vao dung link M3 hoac NCT, xep M3 chay truoc roi den NCT de han che chuyen trang qua lai. Dong khong xac dinh duoc nam sinh hoac <18 tuoi bi loai va ghi ro trong log xuat ra
+// 14.4 | 2026-09-29 | Auto Search: log Excel xuat ra gio GIONG HET file goc da upload (du cot, du dong, ke ca dong khong thuoc nhom da chon) + CHEN 1 cot "Ket qua" ngay truoc cot Ho ten: Thanh cong / Loi: <chi tiet ro> / Bo qua: khac nhom tuoi / Chua xu ly. Nut Dung Auto Search gio cung mo hop thoai ket qua (xuat duoc log) thay vi tat lang le
+// 14.3 | 2026-09-29 | Auto Search: ghi log tung benh nhan (thanh cong / bo qua kem ly do / thoi gian), nut "Xuat log Excel" ngay tren thanh trang thai (xuat duoc giua chung, khong can cho chay xong) va hop thoai ket qua sau khi chay xong danh sach
+// 14.2 | 2026-09-29 | Auto Search: BO doc nhom tuoi tu trang dang mo (de nham lan) - thay bang HOI NGUOI DUNG chon nhom "Nguoi 18-59 tuoi (M3)" / "Nguoi cao tuoi (M4)" NGAY khi bat dau, chon xong moi chon file Excel, xu ly het danh sach theo dung nhom da chon; chon file/nhom khac phai bam lai tu dau. Tu dong dieu huong den dung trang tim kiem cho nhom da chon (khong can nguoi dung tu mo truoc). Van doi chieu nam sinh trong Excel de canh bao neu co dong lech nhom
+// 14.1 | 2026-09-29 | Auto Search: dung nam sinh co san trong Excel (cot E) de xac dinh nhom tuoi thay vi giai ma CCCD (chinh xac hon); CHI xu ly cac dong dung nhom voi trang dang mo (M3 hoac NCT) - khong tu chuyen link giua 2 trang nua, ban tu mo dung trang truoc khi bam Auto Search; luon xoa trang o Dinh danh ca nhan (bo den + xoa) truoc khi dan CCCD moi, tranh dinh so cu
+// 14.0 | 2026-09-28 | THEM "Auto Search" (thu nghiem): tu doc CCCD tu Excel, tu mo trang tim kiem M3 (18-59t) / NCT (>=60t theo CCCD), tu bam Xem, mo Chinh sua, vao Kham can lam sang, tu dien, roi DUNG lai cho ban bam Luu (mac dinh) hoac TU bam Luu (tuy chon, canh bao ro). Sau khi xong 1 nguoi tu chuyen sang nguoi tiep theo trong Excel. Phu thu: +30 luot/benh nhan (chi tu tim, tu Luu tay) hoac +50 luot/benh nhan (tu tim VA tu Luu), cong voi so o dien nhu binh thuong. Nut noi rieng "Auto Search". CANH BAO: tinh nang moi, hay thu vai benh nhan voi tu Luu TAT truoc khi dung that
+// 13.4 | 2026-09-28 | Sửa số dư Medi hiển thị sai/nhảy lên xuống sau khi load trang & điền tự động: số dư nay = số dư đã trừ chính thức (Worker) − lượt chưa/đang gửi trừ (lưu bền qua F5), không còn cộng dồn 2 lần với live_clicks • Heartbeat không còn gửi số lượt cũ sau khi đã trừ • Bỏ qua token cũ đến muộn • Điền tự động chờ ví xác thực xong mới chạy (không hiện nhầm popup hết Medi)
+// 13.3 | 2026-09-28 | Đổi cơ chế tính Medi: MỖI LẦN bấm điền (bấm tay, Excel, điền tự động...) đều tính 1 lượt cho MỖI ô điền / mỗi mục tích, kể cả ô đã có sẵn đúng dữ liệu (ghi đè trùng vẫn tính). Ô đã đúng thì không click lại (tránh bỏ tích), chỉ tính phí • Các trang Trẻ <6 tuổi tự chạy nền vẫn giữ chống trừ trùng khi F5
+// 13.2 | 2026-09-28 | Đổi tên nút nổi thành "Autofill Data XN" • Chuột phải nút này thêm tùy chọn "Điền tự động sau khi load trang xong" (mặc định TẮT): bật lên thì mỗi lần mở trang Cận lâm sàng sẽ tự đọc Excel mới nhất, điền và hiện thông báo, không cần bấm nút
+// 13.1 | 2026-09-28 | Thêm nút nổi "Điền Excel" trên trang Cận lâm sàng: bấm 1 lần là tự đọc file Excel mới nhất và điền • Chuột phải vào mục "Upload Excel..." (hoặc vào nút nổi) để bật/tắt, mặc định BẬT
+// 13.0 | 2026-09-28 | Upload Excel CLS: mỗi lần điền đọc lại file Excel MỚI NHẤT từ ổ đĩa (không còn dùng bản cũ đã tải) • Hematocrit làm tròn 2 chữ số thập phân (0,407 → 0,41)
+// 12.9 | 2026-09-28 | Sửa Upload Excel CLS: trang có 2 nhóm Nitrit (1 nhóm bị khoá) nên script click nhầm nhóm - nay chỉ chọn nhóm đang hoạt động và hiển thị
+// 12.8 | 2026-09-28 | Sửa Upload Excel CLS: ô Nitrit không chọn được Dương Tính (radio không ăn click) - dùng click đầy đủ + thử lại, và báo lệch nếu Nitrit trên trang không khớp Excel
+// 12.7 | 2026-09-28 | Upload Excel CLS: tự đọc lại giá trị sau khi điền, báo ô nào lệch so với Excel (vd bị làm tròn)
+// 12.6 | 2026-09-28 | Sửa Upload Excel Cận lâm sàng: đổi dấu chấm thập phân thành dấu phẩy (4.78 không còn bị điền thành 478)
 (function() {
   "use strict";
+  if (window.name === "_mtt_cccd_frame") {
+    (function() {
+      var t0 = Date.now(), lastClick = 0, clicks = 0;
+      var mCd = window.location.href.match(/[?&]cdId=(\d+)/i), cdId0 = mCd ? mCd[1] : "";
+      var PE = (typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : window).PointerEvent;
+      function tap(el) {
+        [ "pointerdown", "pointerup", "click" ].forEach(function(n) {
+          el.dispatchEvent(new PE(n, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            pointerType: "mouse"
+          }));
+        });
+      }
+      function val(cls) {
+        var i = document.querySelector("." + cls + " input.dx-texteditor-input");
+        return i && i.value ? String(i.value).trim() : "";
+      }
+      function dob() {
+        var v = val("NgaySinh");
+        if (v) return v;
+        var h = document.querySelector(".NgaySinh input[type=hidden]");
+        var m = h && String(h.value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        return m ? m[3] + "/" + m[2] + "/" + m[1] : "";
+      }
+      function gender() {
+        var e = document.querySelector(".GioiTinh .dx-radiobutton-checked .dx-item-content");
+        return e ? e.textContent.trim() : "";
+      }
+      (function poll() {
+        var inp = document.querySelector(".DinhDanhCaNhan input.dx-texteditor-input");
+        var v = inp ? String(inp.value || "").replace(/\D/g, "") : "";
+        if (v.length >= 9 && v.length <= 12) {
+          setTimeout(function() {
+            window.parent.postMessage({
+              mttCccd: v,
+              cdId: cdId0,
+              name: val("HoTen"),
+              dob: dob(),
+              gender: gender()
+            }, window.location.origin);
+          }, 600);
+          return;
+        }
+        var now = Date.now();
+        if (now - lastClick > 2500 && clicks < 6) {
+          var li = document.querySelector('li[data-item-id="KNCT_TTHC"]');
+          if (li) {
+            tap(li.querySelector(".dx-item-content") || li);
+            lastClick = now;
+            clicks++;
+          }
+        }
+        if (now - t0 < 3e4) setTimeout(poll, 250);
+      })();
+    })();
+    return;
+  }
   var _pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : window;
   var MouseEvent = _pageWin.MouseEvent;
   var PointerEvent = _pageWin.PointerEvent;
@@ -2135,7 +2215,7 @@
   }, true);
   var XLS_CACHE_KEY = "_mtt_xls_cls_cache_v1";
   var XLS_FIELDS = [ [ "F", "CongThucMau_SLHC" ], [ "G", "XNM_HuyetSacTo" ], [ "H", "XNM_Hematocrit" ], [ "I", "XNM_MCV" ], [ "J", "XNM_MCH" ], [ "K", "XNM_MCHC" ], [ "L", "XNM_RDW" ], [ "M", "CongThucMau_SLBC" ], [ "N", "SLBC_TrungTinh" ], [ "O", "SLBC_lympho" ], [ "P", "SLBC_DonNhan" ], [ "Q", "SLBC_AiToan" ], [ "R", "SLBC_AiKiem" ], [ "S", "CongThucMau_SLTC" ], [ "T", "SinhHoaMau_DuongMau" ], [ "U", "SinhHoaMau_Ure" ], [ "V", "SinhHoaMau_Creatinin" ], [ "W", "SinhHoaMau_ASAT_GOT" ], [ "X", "SinhHoaMau_ALAT_GPT" ], [ "Y", "NuocTieu_TiTrong" ], [ "Z", "NuocTieu_pH" ], [ "AA", "NuocTieu_BC" ], [ "AB", "NuocTieu_HC" ], [ "AC", "NuocTieu_Protein" ], [ "AD", "NuocTieu_Duong" ], [ "AE", "NuocTieu_Cetonic" ], [ "AF", "NuocTieu_Bilirubin" ], [ "AG", "NuocTieu_Urobilinogen" ] ];
-  var XLS_NITRIT_COL = "AH", XLS_NITRIT_CLASS = "NuocTieu_NiTrit";
+  var XLS_NITRIT_CLASS = "NuocTieu_NiTrit";
   var XLS_MAX_DEC = {
     XNM_Hematocrit: 2
   };
@@ -2144,11 +2224,6 @@
     if (d == null || !/^-?\d+(\.\d+)?$/.test(val)) return val;
     var m = Math.pow(10, d);
     return String(Math.round((parseFloat(val) + Number.EPSILON) * m) / m);
-  }
-  function xlsColIdx(s) {
-    var n = 0;
-    for (var i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
-    return n - 1;
   }
   function xlsNormCccd(v) {
     var d = String(v == null ? "" : v).replace(/\D/g, "");
@@ -2160,10 +2235,135 @@
     if (typeof v === "number") return String(Math.round(v * 1e6) / 1e6);
     return String(v).trim();
   }
-  function xlsGetPageCccd() {
+  function xlsGetPageCccdDirect() {
     var m = (document.body.innerText || "").match(/CCCD\s*:?\s*([0-9]{9,12})/i);
     return m ? xlsNormCccd(m[1]) : "";
   }
+  var _xlsCccdCache = {
+    value: ""
+  };
+  var XLS_CDMAP_KEY = "_mtt_cdid_cccd_v1";
+  function xlsCdMapRead() {
+    try {
+      return JSON.parse(GM_getValue(XLS_CDMAP_KEY, "{}") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+  function xlsCdRec(cd) {
+    var v = cd ? xlsCdMapRead()[cd] : null;
+    if (!v) return null;
+    return typeof v === "string" ? {
+      c: v,
+      n: "",
+      d: "",
+      g: ""
+    } : v;
+  }
+  function xlsCdCccdLoad() {
+    var r = xlsCdRec(xlsCdId());
+    return r && r.c || "";
+  }
+  function xlsCdCccdSave(cccd, cd, extra) {
+    cd = cd || xlsCdId();
+    if (!cd || !cccd) return;
+    try {
+      var m = xlsCdMapRead();
+      var old = m[cd] && typeof m[cd] === "object" && m[cd].c === cccd ? m[cd] : null;
+      var rec = {
+        c: cccd,
+        n: extra && extra.n || old && old.n || "",
+        d: extra && extra.d || old && old.d || "",
+        g: extra && extra.g || old && old.g || ""
+      };
+      if (JSON.stringify(m[cd]) === JSON.stringify(rec)) return;
+      m[cd] = rec;
+      var ks = Object.keys(m);
+      if (ks.length > 1500) ks.slice(0, ks.length - 1e3).forEach(function(k) {
+        delete m[k];
+      });
+      GM_setValue(XLS_CDMAP_KEY, JSON.stringify(m));
+    } catch (e) {}
+  }
+  var _xlsFrameEl = null, _xlsFrameTimer = null, _xlsFrameCd = "", _xlsFrameFailed = false;
+  function xlsCccdFrameEnd() {
+    if (_xlsFrameTimer) clearTimeout(_xlsFrameTimer);
+    _xlsFrameTimer = null;
+    if (_xlsFrameEl) {
+      _xlsFrameEl.remove();
+      _xlsFrameEl = null;
+    }
+  }
+  function xlsCccdFrameStart() {
+    if (_xlsFrameFailed || _xlsFrameEl) return false;
+    var cd = xlsCdId();
+    if (!cd || window.location.href.indexOf("KNCT_PhieuCLS_CanLamSang") === -1) return false;
+    var url = window.location.href;
+    var f = document.createElement("iframe");
+    f.id = "_mtt_cccd_frame";
+    f.name = "_mtt_cccd_frame";
+    f.src = url;
+    f.style.cssText = "position:fixed;left:-10000px;top:0;width:1280px;height:900px;opacity:0;pointer-events:none;border:0;";
+    document.body.appendChild(f);
+    _xlsFrameEl = f;
+    _xlsFrameCd = cd;
+    console.log("[MTT] Đọc CCCD nền: mở iframe ẩn, cdId=" + cd);
+    _xlsFrameTimer = setTimeout(function() {
+      xlsCccdFrameEnd();
+      console.warn("[MTT] Không đọc được CCCD từ trang Thông tin hành chính sau 30 giây");
+      _xlsFrameFailed = true;
+      _xlsCccdResolving = false;
+    }, 3e4);
+    return true;
+  }
+  window.addEventListener("message", function(ev) {
+    var d = ev.data;
+    if (!d || !d.mttCccd || ev.origin !== window.location.origin || !_xlsFrameEl || d.cdId !== _xlsFrameCd) return;
+    var cccd = xlsNormCccd(d.mttCccd);
+    if (!cccd) return;
+    if (xlsCdId() === d.cdId) _xlsCccdCache = {
+      value: cccd
+    };
+    console.log("[MTT] Đọc CCCD qua iframe xong:", cccd, "|", d.name, "|", d.dob, "|", d.gender);
+    xlsCdCccdSave(cccd, d.cdId, {
+      n: d.name,
+      d: d.dob,
+      g: d.gender
+    });
+    xlsCccdFrameEnd();
+    _xlsCccdResolving = false;
+  });
+  function xlsGetPageCccd() {
+    var direct = xlsGetPageCccdDirect();
+    if (direct) return direct;
+    if (!_xlsCccdCache.value) {
+      var pv = xlsCdCccdLoad();
+      if (pv) {
+        _xlsCccdCache = {
+          value: pv
+        };
+        console.log("[MTT] CCCD lấy từ bộ nhớ (không mở iframe, không chuyển tab):", pv);
+      }
+    }
+    return _xlsCccdCache.value || "";
+  }
+  var _xlsCccdResolving = false, _xlsCccdAttempted = false;
+  function xlsCccdResolverTick() {
+    if (_xlsCccdResolving || _xlsCccdAttempted || !isScriptEnabled() || _wrapperHidden || !xlsPageIsCls()) return;
+    if (!_xlsCccdCache.value) {
+      var pv0 = xlsCdCccdLoad();
+      if (pv0) _xlsCccdCache = {
+        value: pv0
+      };
+    }
+    if (xlsGetPageCccdDirect() || _xlsCccdCache.value) return;
+    if (!document.querySelector('li[data-item-id="KNCT_PhieuCLS_CanLamSang"]')) return;
+    if (xlsCccdFrameStart()) {
+      _xlsCccdAttempted = true;
+      _xlsCccdResolving = true;
+    }
+  }
+  setInterval(xlsCccdResolverTick, 900);
   function xlsSetInput(cls, val) {
     var item = document.querySelector("." + cls);
     if (!item) return 0;
@@ -2239,7 +2439,114 @@
     }
     return 0;
   }
-  function xlsParseBuffer(buf) {
+  var _xlsLastAoa = null;
+  function xlsHdrKey(v) {
+    var t = String(v == null ? "" : v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/đ/g, "d");
+    t = t.split("(")[0];
+    return t.replace(/\s+/g, " ").trim();
+  }
+  var XLS_HDR_KEYS = {
+    CongThucMau_SLHC: [ "so luong hc", "so luong hong cau" ],
+    XNM_HuyetSacTo: [ "huyet sac to", "hemoglobin", "hgb" ],
+    XNM_Hematocrit: [ "hematocrit", "hct" ],
+    XNM_MCV: [ "mcv" ],
+    XNM_MCH: [ "mch" ],
+    XNM_MCHC: [ "mchc" ],
+    XNM_RDW: [ "rdw" ],
+    CongThucMau_SLBC: [ "so luong bach cau" ],
+    SLBC_TrungTinh: [ "so luong bach cau trung tinh" ],
+    SLBC_lympho: [ "so luong bach cau lympho" ],
+    SLBC_DonNhan: [ "so luong bach cau don nhan" ],
+    SLBC_AiToan: [ "so luong bach cau ai toan" ],
+    SLBC_AiKiem: [ "so luong bach cau ai kiem" ],
+    CongThucMau_SLTC: [ "so luong tieu cau" ],
+    SinhHoaMau_DuongMau: [ "duong mau" ],
+    SinhHoaMau_Ure: [ "ure", "urea" ],
+    SinhHoaMau_Creatinin: [ "creatinin", "creatinine" ],
+    SinhHoaMau_ASAT_GOT: [ "asat", "got", "ast" ],
+    SinhHoaMau_ALAT_GPT: [ "alat", "gpt", "alt" ],
+    NuocTieu_TiTrong: [ "ti trong", "ty trong" ],
+    NuocTieu_pH: [ "ph" ],
+    NuocTieu_BC: [ "bach cau" ],
+    NuocTieu_HC: [ "hong cau" ],
+    NuocTieu_Protein: [ "protein" ],
+    NuocTieu_Duong: [ "glucose", "duong" ],
+    NuocTieu_Cetonic: [ "the cetonic", "cetonic", "ketone" ],
+    NuocTieu_Bilirubin: [ "bilirubin" ],
+    NuocTieu_Urobilinogen: [ "urobilinogen" ],
+    NuocTieu_NiTrit: [ "nitrit", "nitrite" ]
+  };
+  var XLS_ID_KEYS = {
+    cccd: [ "cccd", "so cccd", "cmnd", "can cuoc cong dan", "so can cuoc" ],
+    name: [ "benh nhan", "ho ten", "ho va ten", "ten benh nhan", "ten" ],
+    gender: [ "phai", "gioi tinh", "gioi", "gt" ],
+    dob: [ "ngay sinh" ],
+    year: [ "nam sinh", "tuoi", "ns" ]
+  };
+  function xlsFmtDate(d, m, y) {
+    return (d < 10 ? "0" : "") + d + "/" + (m < 10 ? "0" : "") + m + "/" + y;
+  }
+  function xlsParseBirth(raw) {
+    var out = {
+      text: "",
+      year: null,
+      full: false
+    };
+    if (raw == null || raw === "") return out;
+    var thisYear = (new Date).getFullYear();
+    if (typeof raw === "number") {
+      if (raw > 1900 && raw < 2100) {
+        out.year = Math.round(raw);
+        out.text = String(out.year);
+        return out;
+      }
+      if (raw > 20000 && raw < 80000) {
+        var dt = new Date(Math.round((raw - 25569) * 864e5));
+        out.year = dt.getUTCFullYear();
+        out.text = xlsFmtDate(dt.getUTCDate(), dt.getUTCMonth() + 1, out.year);
+        out.full = true;
+        return out;
+      }
+      if (raw > 0 && raw < 150) {
+        out.year = thisYear - Math.round(raw);
+        out.text = "";
+        return out;
+      }
+      return out;
+    }
+    var str = String(raw).trim();
+    var m = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (m) {
+      out.year = parseInt(m[3], 10);
+      out.text = xlsFmtDate(parseInt(m[1], 10), parseInt(m[2], 10), out.year);
+      out.full = true;
+      return out;
+    }
+    m = str.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+    if (m) {
+      out.year = parseInt(m[1], 10);
+      out.text = xlsFmtDate(parseInt(m[3], 10), parseInt(m[2], 10), out.year);
+      out.full = true;
+      return out;
+    }
+    if (/^\d{4}$/.test(str)) {
+      out.year = parseInt(str, 10);
+      out.text = str;
+      return out;
+    }
+    if (/^\d{1,3}$/.test(str) && parseInt(str, 10) < 150) {
+      out.year = thisYear - parseInt(str, 10);
+      return out;
+    }
+    return out;
+  }
+  function xlsGenderLabel(g) {
+    var k = xlsHdrKey(g);
+    if (k === "f" || k === "nu" || k === "female" || k === "0") return "Nữ";
+    if (k === "m" || k === "nam" || k === "male" || k === "1") return "Nam";
+    return String(g == null ? "" : g).trim();
+  }
+  function xlsParseBuffer(buf, fileName) {
     if (typeof XLSX === "undefined") throw new Error("Chưa tải được thư viện đọc Excel (SheetJS)");
     var wb = XLSX.read(new Uint8Array(buf), {
       type: "array"
@@ -2250,21 +2557,87 @@
       raw: true,
       defval: ""
     });
-    var h = aoa[1] || [];
-    if (String(h[xlsColIdx(XLS_NITRIT_COL)] || "").toLowerCase().indexOf("nitrit") === -1 || String(h[xlsColIdx("F")] || "").indexOf("HC") === -1) {
-      throw new Error("Sai định dạng file (cột F phải là Số lượng HC, cột AH là Nitrit, tiêu đề ở dòng 2)");
+    _xlsLastAoa = aoa;
+    var scan = Math.min(aoa.length, 6), maxCols = 0, i, c;
+    for (i = 0; i < scan; i++) if ((aoa[i] || []).length > maxCols) maxCols = aoa[i].length;
+    var hdr = [];
+    for (c = 0; c < maxCols; c++) hdr[c] = [];
+    var cccdRow = -1, labRow = -1, labBest = 0;
+    for (i = 0; i < scan; i++) {
+      var rr = aoa[i] || [], labHits = 0;
+      for (c = 0; c < rr.length; c++) {
+        var k = xlsHdrKey(rr[c]);
+        if (!k) continue;
+        if (cccdRow === -1 && XLS_ID_KEYS.cccd.indexOf(k) !== -1) cccdRow = i;
+        for (var cls in XLS_HDR_KEYS) if (XLS_HDR_KEYS[cls].indexOf(k) !== -1) {
+          labHits++;
+          break;
+        }
+      }
+      if (labHits > labBest) {
+        labBest = labHits;
+        labRow = i;
+      }
     }
-    var rows = [];
-    for (var i = 2; i < aoa.length; i++) {
-      var r = aoa[i], cccd = xlsNormCccd(r[1]);
+    if (cccdRow === -1) throw new Error("Sai định dạng file: không thấy cột tiêu đề \"CCCD\" trong 6 dòng đầu");
+    if (labBest < 5) throw new Error("Sai định dạng file: không nhận diện được các cột xét nghiệm (tiêu đề như \"Số lượng HC\", \"Huyết sắc tố\"...)");
+    var hdrEnd = Math.max(cccdRow, labRow);
+    for (i = 0; i <= hdrEnd; i++) {
+      var r0 = aoa[i] || [];
+      for (c = 0; c < maxCols; c++) {
+        var kk = xlsHdrKey(r0[c]);
+        if (kk) hdr[c].push(kk);
+      }
+    }
+    function findId(list) {
+      for (var a = 0; a < list.length; a++) for (var cc = 0; cc < maxCols; cc++) if (hdr[cc].indexOf(list[a]) !== -1) return cc;
+      return -1;
+    }
+    var colMap = {
+      __missing: []
+    };
+    var ci = {
+      cccd: findId(XLS_ID_KEYS.cccd),
+      name: findId(XLS_ID_KEYS.name),
+      gender: findId(XLS_ID_KEYS.gender),
+      dob: findId(XLS_ID_KEYS.dob),
+      year: findId(XLS_ID_KEYS.year)
+    };
+    if (ci.cccd === -1) throw new Error("Sai định dạng file: không thấy cột \"CCCD\"");
+    for (var cls2 in XLS_HDR_KEYS) {
+      var found = -1;
+      for (c = 0; c < maxCols && found === -1; c++) {
+        var last = hdr[c].length ? hdr[c][hdr[c].length - 1] : "";
+        if (last && XLS_HDR_KEYS[cls2].indexOf(last) !== -1) found = c;
+      }
+      if (found === -1) colMap.__missing.push(cls2); else colMap[cls2] = found;
+    }
+    var rows = [], ident = {};
+    for (i = hdrEnd + 1; i < aoa.length; i++) {
+      var r = aoa[i], cccd = xlsNormCccd(r[ci.cccd]);
       if (!cccd) continue;
+      var bRaw = ci.dob !== -1 && r[ci.dob] !== "" ? r[ci.dob] : ci.year !== -1 ? r[ci.year] : "";
+      var b = xlsParseBirth(bRaw);
+      if (!b.year && ci.year !== -1 && ci.dob !== -1) b = xlsParseBirth(r[ci.year]);
+      var nm = ci.name !== -1 ? String(r[ci.name] || "").trim() : "";
+      var gd = ci.gender !== -1 ? xlsGenderLabel(r[ci.gender]) : "";
       rows.push({
         cccd: cccd,
-        name: String(r[2] || ""),
-        cells: r
+        name: nm,
+        cells: r,
+        birthYear: b.year && b.year > 1900 && b.year < 2100 ? b.year : null
       });
+      ident[cccd] = {
+        name: nm,
+        gender: gd,
+        birth: b.text,
+        full: b.full,
+        year: b.year || null
+      };
     }
-    if (!rows.length) throw new Error("Không có dòng bệnh nhân nào (cột B - CCCD trống)");
+    if (!rows.length) throw new Error("Không có dòng bệnh nhân nào (cột CCCD trống)");
+    rows.colMap = colMap;
+    xlsIdentSave(ident, fileName);
     return rows;
   }
   function xlsFillFromRows(rows, meta) {
@@ -2282,9 +2655,19 @@
       showToast("❌ CCCD " + cccd + " không có trong file Excel", "error");
       return 0;
     }
-    var filled = 0, missing = [];
+    var filled = 0, missing = [], colMap = rows.colMap || {
+      __missing: []
+    }, noCol = [];
+    function cellOf(cls) {
+      var ix = colMap[cls];
+      return ix == null ? "" : row.cells[ix];
+    }
     XLS_FIELDS.forEach(function(f) {
-      var val = xlsNormVal(row.cells[xlsColIdx(f[0])]);
+      if (colMap[f[1]] == null) {
+        noCol.push(f[1]);
+        return;
+      }
+      var val = xlsNormVal(cellOf(f[1]));
       if (val === "") return;
       val = xlsRoundFor(f[1], val);
       if (/^-?\d+\.\d+$/.test(val)) val = val.replace(".", ",");
@@ -2294,11 +2677,11 @@
       }
       filled += xlsSetInput(f[1], val);
     });
-    filled += xlsSetNitrit(row.cells[xlsColIdx(XLS_NITRIT_COL)]);
+    filled += xlsSetNitrit(cellOf(XLS_NITRIT_CLASS));
     setTimeout(function() {
       var bad = [];
       XLS_FIELDS.forEach(function(f) {
-        var want = xlsNormVal(row.cells[xlsColIdx(f[0])]);
+        var want = xlsNormVal(cellOf(f[1]));
         if (want === "") return;
         want = xlsRoundFor(f[1], want);
         var it = document.querySelector("." + f[1]);
@@ -2307,9 +2690,9 @@
         var got = String(inp.value || "").trim();
         var a = parseFloat(want.replace(",", ".")), b = parseFloat(got.replace(",", "."));
         var same = !isNaN(a) && !isNaN(b) ? Math.abs(a - b) < 1e-9 : got === want;
-        if (!same) bad.push(f[0] + ": Excel " + want + " → trang " + (got || "(trống)"));
+        if (!same) bad.push(f[1] + ": Excel " + want + " → trang " + (got || "(trống)"));
       });
-      var wantN = xlsNitritWant(row.cells[xlsColIdx(XLS_NITRIT_COL)]);
+      var wantN = xlsNitritWant(cellOf(XLS_NITRIT_CLASS));
       if (wantN) {
         var gN = xlsFindNitritGroup();
         var okN = false;
@@ -2317,7 +2700,7 @@
           var selN = gN.querySelector('.dx-radiobutton-checked, [aria-checked="true"]');
           okN = !!selN && selN.textContent.trim().toLowerCase().normalize("NFC") === wantN;
         }
-        if (!okN) bad.push("AH Nitrit: Excel " + wantN + " → trang không khớp");
+        if (!okN) bad.push("Nitrit: Excel " + wantN + " → trang không khớp");
       }
       if (bad.length) {
         console.warn("[Medinet] Ô không khớp Excel:", bad);
@@ -2325,6 +2708,10 @@
       }
     }, 900);
     if (missing.length) console.warn("[Medinet] Không thấy ô:", missing);
+    if (noCol.length) {
+      console.warn("[Medinet] Excel thiếu cột:", noCol);
+      showToast("⚠ File Excel thiếu " + noCol.length + " cột (không có tiêu đề tương ứng): " + noCol.slice(0, 4).join(", ") + (noCol.length > 4 ? " …" : ""), "warn");
+    }
     showToast("✅ " + row.name + " — đã điền " + filled + " ô" + (missing.length ? " (thiếu " + missing.length + " ô trên trang)" : "") + (meta ? " [" + meta + "]" : "") + ". Nhớ bấm Lưu thay đổi.", missing.length ? "warn" : "success");
     return filled;
   }
@@ -2398,7 +2785,7 @@
   }
   function xlsFillFromBuffer(file, buf) {
     try {
-      var rows = xlsParseBuffer(buf);
+      var rows = xlsParseBuffer(buf, file.name);
       var n = xlsFillFromRows(rows, file.name + " - sửa lúc " + xlsFmtTime(file.lastModified));
       if (n > 0) spendCredits(n);
     } catch (err) {
@@ -2615,7 +3002,7 @@
       btn = document.createElement("button");
       btn.id = XLS_FLOAT_ID;
       btn.type = "button";
-      btn.textContent = "📊 Autofill Data XN";
+      btn.textContent = "📊 Điền kết quả CLS";
       btn.title = "Bấm: đọc file Excel mới nhất và điền theo CCCD • Chuột phải: tùy chọn (nút nổi / điền tự động khi load trang)";
       Object.assign(btn.style, {
         position: "fixed",
@@ -2762,20 +3149,20 @@
       return;
     }
     if (typeof _pageWin.showOpenFilePicker !== "function" || !_pageWin.indexedDB) {
-      showToast("⚠ Trình duyệt không hỗ trợ điền tự động - hãy bấm nút Autofill Data XN", "warn");
+      showToast("⚠ Trình duyệt không hỗ trợ điền tự động - hãy bấm nút Điền kết quả CLS", "warn");
       return;
     }
     xlsAutoBusy = true;
     xlsIdbGet("file").then(function(h) {
       if (!h) {
-        showToast("⚠ Điền tự động: chưa chọn file Excel - bấm nút Autofill Data XN để chọn file 1 lần", "warn");
+        showToast("⚠ Điền tự động: chưa chọn file Excel - bấm nút Điền kết quả CLS để chọn file 1 lần", "warn");
         return null;
       }
       return h.queryPermission({
         mode: "read"
       }).then(function(p) {
         if (p !== "granted") {
-          showToast("⚠ Điền tự động: cần cấp quyền đọc file Excel - bấm nút Autofill Data XN 1 lần (sau đó các trang sau sẽ tự điền)", "warn");
+          showToast("⚠ Điền tự động: cần cấp quyền đọc file Excel - bấm nút Điền kết quả CLS 1 lần (sau đó các trang sau sẽ tự điền)", "warn");
           return null;
         }
         return h.getFile().then(function(file) {
@@ -2792,6 +3179,1349 @@
   }
   setInterval(xlsUpdateFloatBtn, 800);
   setInterval(xlsAutoTick, 700);
+  var XLS_IDENT_KEY = "_mtt_xls_ident_v1";
+  var _xlsIdent = null;
+  function xlsIdentSave(map, fileName) {
+    var prev = _xlsIdent;
+    _xlsIdent = {
+      map: map,
+      file: fileName || prev && prev.file || "",
+      at: Date.now()
+    };
+    try {
+      GM_setValue(XLS_IDENT_KEY, JSON.stringify(_xlsIdent));
+    } catch (e) {}
+  }
+  function xlsIdentLoad() {
+    if (_xlsIdent) return _xlsIdent;
+    try {
+      var v = GM_getValue(XLS_IDENT_KEY, null);
+      if (v) _xlsIdent = JSON.parse(v);
+    } catch (e) {}
+    return _xlsIdent;
+  }
+  var _identRefreshAt = 0, _identRefreshing = false;
+  function xlsIdentRefreshFromFile() {
+    if (_identRefreshing || Date.now() - _identRefreshAt < 1e4 || !_pageWin.indexedDB) return;
+    _identRefreshing = true;
+    _identRefreshAt = Date.now();
+    var keepAoa = _xlsLastAoa;
+    xlsIdbGet("file").then(function(h) {
+      if (!h) return null;
+      return h.queryPermission({
+        mode: "read"
+      }).then(function(p) {
+        if (p !== "granted") return null;
+        return h.getFile().then(function(file) {
+          return file.arrayBuffer().then(function(buf) {
+            xlsParseBuffer(buf, file.name);
+          });
+        });
+      });
+    }).catch(function() {}).then(function() {
+      _xlsLastAoa = keepAoa;
+      _identRefreshing = false;
+    });
+  }
+  function xlsCdId() {
+    var m = window.location.href.match(/[?&]cdId=(\d+)/i);
+    return m ? m[1] : "";
+  }
+  var _xlsCdIdSeen = xlsCdId();
+  function xlsCdIdWatch() {
+    if (!xlsPageIsCls()) return;
+    var c = xlsCdId();
+    if (c && _xlsCdIdSeen && c !== _xlsCdIdSeen) {
+      _xlsCccdCache = {
+        value: ""
+      };
+      _xlsCccdAttempted = false;
+      _xlsFrameFailed = false;
+      if (_xlsFrameEl) {
+        xlsCccdFrameEnd();
+        _xlsCccdResolving = false;
+      }
+    }
+    if (c) _xlsCdIdSeen = c;
+  }
+  setInterval(xlsCdIdWatch, 500);
+  var XLS_IDENT_PANEL_ID = "_mtt_ident_panel";
+  function xlsIdentPageOk() {
+    return window.location.href.indexOf("KNCT_PhieuCLS_CanLamSang") !== -1;
+  }
+  function xlsIdentFindAnchor() {
+    var a = document.querySelector(".groupitem65351003785");
+    if (a) return a;
+    var hs = document.querySelectorAll(".h-item");
+    for (var i = 0; i < hs.length; i++) {
+      var t = (hs[i].textContent || "").replace(/\s+/g, " ").trim();
+      if (t.indexOf("Nội dung") === 0 && t.indexOf("Cận lâm sàng thực hiện") !== -1) return hs[i];
+    }
+    return null;
+  }
+  function xlsIdentItem(icon, color, label, value, bold) {
+    var sp = document.createElement("span");
+    sp.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin:2px 14px;font-size:13.5px;color:#4b5563;";
+    var ic = document.createElement("i");
+    ic.className = "fa " + icon;
+    ic.style.color = color;
+    sp.appendChild(ic);
+    sp.appendChild(document.createTextNode(label + ": "));
+    var b = document.createElement("b");
+    b.style.color = "#111";
+    b.textContent = value;
+    sp.appendChild(b);
+    return sp;
+  }
+  function xlsIdentRender(panel, sig, cccd, rec, ident, pinfo, failed) {
+    if (panel.getAttribute("data-sig") === sig) return;
+    panel.setAttribute("data-sig", sig);
+    panel.textContent = "";
+    var title = document.createElement("div");
+    title.style.cssText = "text-align:center;font-weight:700;font-size:15px;color:#1e88e5;margin-bottom:4px;";
+    title.innerHTML = '<i class="fa fa-id-card" style="margin-right:6px"></i>THÔNG TIN ĐỐI TƯỢNG KHÁM';
+    panel.appendChild(title);
+    var body = document.createElement("div");
+    body.style.cssText = "text-align:center;";
+    if (!cccd) {
+      body.style.cssText += failed ? "font-size:13px;color:#dc2626;font-weight:600;" : "font-size:13px;color:#6b7280;";
+      body.textContent = failed ? "Không đọc được CCCD từ trang Thông tin hành chính — tải lại trang (F5) để thử lại." : "Đang đọc CCCD của đối tượng…";
+    } else if (!ident) {
+      body.style.cssText += "font-size:13px;color:#b45309;";
+      body.textContent = "CCCD " + cccd + " — chưa có dữ liệu Excel. Bấm nút \"Điền kết quả CLS\" để chọn file Excel 1 lần.";
+    } else if (!rec) {
+      body.style.cssText += "font-size:13px;color:#dc2626;font-weight:600;";
+      body.textContent = "CCCD " + cccd + " không có trong file Excel" + (ident.file ? " (" + ident.file + ")" : "");
+    } else {
+      body.appendChild(xlsIdentItem("fa-user", "#1e88e5", "Họ tên", rec.name || "—"));
+      body.appendChild(xlsIdentItem("fa-id-card-o", "#16a34a", "CCCD", cccd));
+      body.appendChild(xlsIdentItem("fa-calendar", "#f97316", pinfo && pinfo.d || rec.full ? "Ngày sinh" : "Năm sinh", pinfo && pinfo.d || rec.birth || (rec.year ? String(rec.year) : "—")));
+      body.appendChild(xlsIdentItem("fa-venus-mars", "#8b5cf6", "Giới tính", rec.gender || "—"));
+    }
+    panel.appendChild(body);
+    if (rec && pinfo) {
+      var nk = function(x) {
+        return String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/đ/g, "d").replace(/\s+/g, " ").trim();
+      };
+      var warns = [];
+      if (pinfo.n && rec.name && nk(pinfo.n) !== nk(rec.name)) warns.push("tên trên Medinet \"" + pinfo.n + "\" khác Excel \"" + rec.name + "\"");
+      var py = (pinfo.d || "").match(/(\d{4})\s*$/);
+      if (py && rec.year && parseInt(py[1], 10) !== rec.year) warns.push("năm sinh Medinet " + py[1] + " khác Excel " + rec.year);
+      if (pinfo.g && rec.gender && nk(pinfo.g) !== nk(rec.gender)) warns.push("giới tính Medinet " + pinfo.g + " khác Excel " + rec.gender);
+      if (warns.length) {
+        var w = document.createElement("div");
+        w.style.cssText = "text-align:center;font-size:12.5px;color:#dc2626;font-weight:700;margin-top:3px;";
+        w.textContent = "⚠ Lệch dữ liệu: " + warns.join("; ") + " — kiểm tra lại trước khi lưu!";
+        panel.appendChild(w);
+      }
+    }
+    if (rec && ident) {
+      var src = document.createElement("div");
+      src.style.cssText = "text-align:center;font-size:11px;color:#9ca3af;margin-top:2px;";
+      src.textContent = "Nguồn: file Excel" + (ident.file ? " " + ident.file : "");
+      panel.appendChild(src);
+    }
+  }
+  function xlsIdentTick() {
+    var panel = document.getElementById(XLS_IDENT_PANEL_ID);
+    if (!xlsIdentPageOk() || !isScriptEnabled() || _wrapperHidden) {
+      if (panel) panel.remove();
+      return;
+    }
+    var anchor = xlsIdentFindAnchor();
+    if (!anchor || !anchor.parentNode) return;
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = XLS_IDENT_PANEL_ID;
+      panel.style.cssText = "border:1px solid #e0e7f3;border-radius:8px;padding:8px 10px;margin:0 0 8px 0;background:#fff;font-family:inherit;";
+    }
+    if (panel.parentNode !== anchor.parentNode || panel.nextElementSibling !== anchor) anchor.parentNode.insertBefore(panel, anchor);
+    var cccd = xlsGetPageCccd();
+    var ident = xlsIdentLoad();
+    var rec = cccd && ident && ident.map ? ident.map[cccd] || null : null;
+    if (cccd && !rec) xlsIdentRefreshFromFile();
+    if (!ident) xlsIdentRefreshFromFile();
+    var pinfo = xlsCdRec(xlsCdId());
+    if (!pinfo || pinfo.c !== cccd) pinfo = null;
+    var sig = [ cccd, ident ? ident.at : 0, rec ? rec.name + rec.birth + rec.gender : "-", pinfo ? pinfo.n + "|" + pinfo.d + "|" + pinfo.g : "", _xlsFrameFailed ? "F" : "" ].join("|");
+    xlsIdentRender(panel, sig, cccd, rec, ident, pinfo, _xlsFrameFailed && !cccd);
+  }
+  setInterval(xlsIdentTick, 800);
+  var BATCH_KEY = "_mtt_batch_state_v1";
+  var BATCH_SURCHARGE_MANUAL = 30;
+  var BATCH_SURCHARGE_AUTO = 50;
+  var BATCH_M3_URL = "https://quanlyskcd.medinet.org.vn/app/main/dynamicreport/report/viewer-utility/KSKDK_DanhSach_KSK_M13";
+  var BATCH_NCT_URL = "https://quanlyskcd.medinet.org.vn/app/main/dynamicreport/report/viewer-utility/KSKDK_DanhSach_KSK_NguoiCaoTuoi_Report";
+  var BATCH_PHASE_TIMEOUT = 35e3;
+  var BATCH_DONE_KEY = "_mtt_batch_done_v1";
+  var BATCH_DONE_TTL = 7 * 864e5;
+  function batchDoneRead() {
+    try {
+      var m = JSON.parse(GM_getValue(BATCH_DONE_KEY, "{}") || "{}");
+      var now = Date.now(), out = {};
+      Object.keys(m).forEach(function(k) {
+        if (now - m[k] < BATCH_DONE_TTL) out[k] = m[k];
+      });
+      return out;
+    } catch (e) {
+      return {};
+    }
+  }
+  function batchDoneMark(cccd) {
+    try {
+      var m = batchDoneRead();
+      m[cccd] = Date.now();
+      GM_setValue(BATCH_DONE_KEY, JSON.stringify(m));
+    } catch (e) {}
+  }
+  function batchDoneClear() {
+    try {
+      GM_setValue(BATCH_DONE_KEY, "{}");
+    } catch (e) {}
+  }
+  function batchFmtStamp(ms) {
+    var d = new Date(ms);
+    function p(n) {
+      return (n < 10 ? "0" : "") + n;
+    }
+    return p(d.getDate()) + "/" + p(d.getMonth() + 1) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  var batchTicking = false;
+  var batchManualHooked = false;
+  function batchGetState() {
+    try {
+      var v = GM_getValue(BATCH_KEY, null);
+      return v ? JSON.parse(v) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function batchSetState(st) {
+    try {
+      GM_setValue(BATCH_KEY, st ? JSON.stringify(st) : "");
+    } catch (e) {}
+  }
+  function batchClearState() {
+    batchSetState(null);
+  }
+  function batchAgeGroupFromCccd(cccd) {
+    if (!/^\d{12}$/.test(cccd)) return null;
+    var centuryCode = parseInt(cccd[3], 10);
+    var centuryBase = [ 1900, 1900, 2e3, 2e3, 2100, 2100, 2200, 2200 ][centuryCode];
+    if (!centuryBase) return null;
+    var birthYear = centuryBase + parseInt(cccd.substr(4, 2), 10);
+    return batchAgeGroupFromYear(birthYear);
+  }
+  function batchAgeGroupFromYear(birthYear) {
+    if (!birthYear) return null;
+    var age = (new Date).getFullYear() - birthYear;
+    if (age >= 18 && age <= 59) return "m3";
+    if (age >= 60) return "nct";
+    return null;
+  }
+  function batchAgeGroupFromRow(row) {
+    return batchAgeGroupFromYear(row.birthYear) || batchAgeGroupFromCccd(row.cccd);
+  }
+  function batchIsBusyPage() {
+    var sels = [ ".dx-loadpanel:not(.dx-state-invisible)", ".dx-overlay-loading-indicator", ".dx-loadindicator", 'ngx-loading-bar .bar:not([style*="width: 0"])' ];
+    for (var i = 0; i < sels.length; i++) if (document.querySelector(sels[i])) return true;
+    return false;
+  }
+  function batchWaitFor(find, timeoutMs) {
+    timeoutMs = timeoutMs || BATCH_PHASE_TIMEOUT;
+    return new Promise(function(resolve) {
+      var start = Date.now(), stableSince = 0;
+      (function poll() {
+        var el = null;
+        try {
+          el = find();
+        } catch (e) {}
+        var busy = batchIsBusyPage();
+        if (el && !busy) {
+          if (!stableSince) stableSince = Date.now();
+          if (Date.now() - stableSince > 450) {
+            resolve(el);
+            return;
+          }
+        } else {
+          stableSince = 0;
+        }
+        if (Date.now() - start > timeoutMs) {
+          resolve(null);
+          return;
+        }
+        setTimeout(poll, 250);
+      })();
+    });
+  }
+  function batchFindXemBtn() {
+    var btns = document.querySelectorAll("dx-button");
+    for (var i = 0; i < btns.length; i++) {
+      var t = (btns[i].querySelector(".dx-button-text") || btns[i]).textContent.trim();
+      if (t === "Xem") return btns[i];
+    }
+    return null;
+  }
+  function batchFindCccdInput() {
+    return document.querySelector('input[name="KSKDK_DinhDanhCaNhan"]');
+  }
+  function batchSetCccdInput(inp, val) {
+    fullClick(inp);
+    inp.focus({
+      preventScroll: true
+    });
+    try {
+      inp.setSelectionRange(0, inp.value.length);
+    } catch (e) {}
+    nativeSetter.call(inp, "");
+    inp.dispatchEvent(new Event("input", {
+      bubbles: true
+    }));
+    nativeSetter.call(inp, val);
+    inp.dispatchEvent(new Event("input", {
+      bubbles: true
+    }));
+    inp.dispatchEvent(new Event("change", {
+      bubbles: true
+    }));
+  }
+  function batchFindResultRow(expectedCccd) {
+    var rv = document.querySelector(".dx-datagrid-rowsview .dx-scrollable-content .dx-datagrid-content") || document.querySelector(".dx-datagrid-rowsview .dx-datagrid-content");
+    if (!rv) return null;
+    var row = rv.querySelector('tr.dx-data-row[aria-rowindex="1"]');
+    if (!row) return null;
+    if (row.querySelector(".dx-datagrid-nodata") || !row.cells || row.cells.length < 3) return null;
+    if (expectedCccd && (row.textContent || "").indexOf(expectedCccd) === -1) return null;
+    return row;
+  }
+  function batchFindM3EditLink(row) {
+    return row.querySelector("a i.fa-pen") ? row.querySelector("a i.fa-pen").closest("a") : null;
+  }
+  function batchFindNctCogBtn(row) {
+    var b = row.querySelector(".dropdown-toggle.btn");
+    return b || (row.querySelector("i.fa-cog") ? row.querySelector("i.fa-cog").closest("button") : null);
+  }
+  function batchFindDropdownEditLink() {
+    var links = document.querySelectorAll(".dropdown-menu.show a, ul.dropdown-menu a");
+    for (var i = 0; i < links.length; i++) if (/Chỉnh sửa/i.test(links[i].textContent)) return links[i];
+    return null;
+  }
+  function batchFindTreeItem(itemId) {
+    return document.querySelector('li[data-item-id="' + itemId + '"]');
+  }
+  function batchSearchUrl(group) {
+    return group === "nct" ? BATCH_NCT_URL : BATCH_M3_URL;
+  }
+  function batchClsItemId(group) {
+    return group === "nct" ? "KNCT_PhieuCLS_CanLamSang" : "KSKDK_Phieu_CanLamSang";
+  }
+  function batchStatusUpdate(text) {
+    var bar = document.getElementById("_mtt_batch_bar");
+    if (bar) bar.querySelector("._mtt_batch_text").textContent = text;
+  }
+  function batchShowBar(st) {
+    var ID = "_mtt_batch_bar";
+    var bar = document.getElementById(ID);
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = ID;
+      Object.assign(bar.style, {
+        position: "fixed",
+        left: "0",
+        right: "0",
+        bottom: "0",
+        zIndex: "2147483002",
+        background: "#0f172a",
+        color: "#fff",
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: "14px",
+        fontFamily: "Segoe UI, Arial, sans-serif",
+        fontSize: "13px"
+      });
+      var txt = document.createElement("div");
+      txt.className = "_mtt_batch_text";
+      txt.style.flex = "1";
+      bar.appendChild(txt);
+      var skipBtn = document.createElement("button");
+      skipBtn.textContent = "Bỏ qua người này";
+      Object.assign(skipBtn.style, {
+        padding: "6px 12px",
+        border: "none",
+        borderRadius: "6px",
+        background: "#f59e0b",
+        color: "#111",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      skipBtn.addEventListener("click", function() {
+        batchSkipCurrent("người dùng bỏ qua");
+      });
+      var okBtn = document.createElement("button");
+      okBtn.className = "_mtt_batch_confirm";
+      okBtn.textContent = "✔ Đã lưu — chuyển tiếp";
+      Object.assign(okBtn.style, {
+        display: "none",
+        padding: "6px 12px",
+        border: "none",
+        borderRadius: "6px",
+        background: "#16a34a",
+        color: "#fff",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      okBtn.addEventListener("click", function() {
+        var cur = batchGetState();
+        if (!cur || !cur.active || cur.phase !== "await_save") return;
+        if (!window.confirm("Chỉ bấm OK nếu bạn đã thấy Medinet báo LƯU THÀNH CÔNG cho người này.\nChuyển sang người tiếp theo?")) return;
+        cur.stats.done++;
+        batchLogRow(cur, "Thành công", "người dùng xác nhận đã lưu");
+        batchAdvance(cur);
+      });
+      bar.appendChild(okBtn);
+      bar.appendChild(skipBtn);
+      var logBtn = document.createElement("button");
+      logBtn.textContent = "⬇ Xuất log Excel";
+      Object.assign(logBtn.style, {
+        padding: "6px 12px",
+        border: "none",
+        borderRadius: "6px",
+        background: "#0ea5e9",
+        color: "#fff",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      logBtn.addEventListener("click", function() {
+        var cur = batchGetState();
+        if (cur) batchExportLog(cur);
+      });
+      bar.appendChild(logBtn);
+      var stopBtn = document.createElement("button");
+      stopBtn.textContent = "⏹ Dừng Chế độ hàng loạt";
+      Object.assign(stopBtn.style, {
+        padding: "6px 12px",
+        border: "none",
+        borderRadius: "6px",
+        background: "#dc2626",
+        color: "#fff",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      stopBtn.addEventListener("click", batchStop);
+      bar.appendChild(stopBtn);
+      document.body.appendChild(bar);
+    }
+    var n = st.queue.length;
+    bar.querySelector("._mtt_batch_text").textContent = "🔎 Chế độ hàng loạt: bệnh nhân " + (st.idx + 1) + "/" + n + (st.queue[st.idx] ? " — " + st.queue[st.idx].cccd : "") + " — đã xong " + st.stats.done + ", bỏ qua " + st.stats.skip + " [" + batchModeLabel(st) + "]" + (st.msg ? " — " + st.msg : "");
+    var cbtn = bar.querySelector("._mtt_batch_confirm");
+    if (cbtn) cbtn.style.display = st.phase === "await_save" ? "" : "none";
+  }
+  function batchHideBar() {
+    var bar = document.getElementById("_mtt_batch_bar");
+    if (bar) bar.remove();
+  }
+  function batchStop() {
+    var st = batchGetState();
+    if (!st) return;
+    st.active = false;
+    batchSetState(st);
+    showToast("⏹ Đã dừng Chế độ hàng loạt", "warn");
+    batchFinish(st);
+  }
+  function batchFinish(st) {
+    batchHideBar();
+    showToast("✅ Chế độ hàng loạt xong: " + st.stats.done + " người, bỏ qua " + st.stats.skip, "success");
+    var ID = "_mtt_batch_done_modal";
+    var old = document.getElementById(ID);
+    if (old) old.remove();
+    var overlay = document.createElement("div");
+    overlay.id = ID;
+    Object.assign(overlay.style, {
+      position: "fixed",
+      inset: "0",
+      background: "rgba(0,0,0,0.45)",
+      zIndex: "2147483003",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    });
+    var card = document.createElement("div");
+    Object.assign(card.style, {
+      background: "#fff",
+      borderRadius: "10px",
+      padding: "18px",
+      width: "380px",
+      maxWidth: "92vw",
+      fontFamily: "Segoe UI, Arial, sans-serif",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+    });
+    var title = document.createElement("div");
+    title.textContent = "✅ Chế độ hàng loạt đã chạy xong";
+    title.style.cssText = "font-size:15px;font-weight:700;color:#0f766e;margin-bottom:8px;";
+    card.appendChild(title);
+    var info = document.createElement("div");
+    info.textContent = "Thành công: " + st.stats.done + " — Bỏ qua: " + st.stats.skip + (st.stats.skipList.length ? "\n" + st.stats.skipList.slice(0, 6).join("\n") + (st.stats.skipList.length > 6 ? "\n…" : "") : "");
+    if (batchModeOf(st) === "auto_skip" && st.stats.skip > 0) info.textContent += "\n\n⚠ Có " + st.stats.skip + " người chưa lưu/bị lỗi — xuất log Excel, lọc cột \"Kết quả\" bắt đầu bằng \"Lỗi\" rồi sửa tay.";
+    info.style.cssText = "font-size:12px;color:#333;margin-bottom:14px;line-height:1.6;white-space:pre-line;max-height:220px;overflow:auto;";
+    card.appendChild(info);
+    function mkBtn(text, bg, color, onClick) {
+      var b = document.createElement("button");
+      b.textContent = text;
+      Object.assign(b.style, {
+        display: "block",
+        width: "100%",
+        padding: "10px",
+        margin: "8px 0 0",
+        border: "none",
+        borderRadius: "6px",
+        background: bg,
+        color: color,
+        fontSize: "13px",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      b.addEventListener("click", function(e) {
+        e.preventDefault();
+        onClick();
+      });
+      return b;
+    }
+    card.appendChild(mkBtn("⬇ Xuất log Excel", "#0ea5e9", "#fff", function() {
+      batchExportLog(st);
+    }));
+    card.appendChild(mkBtn("Đóng", "#e5e7eb", "#111", function() {
+      overlay.remove();
+      batchClearState();
+    }));
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+  }
+  function batchNowStr() {
+    var d = new Date;
+    function p2(n) {
+      return (n < 10 ? "0" : "") + n;
+    }
+    return p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
+  }
+  var BATCH_SAVE_WAIT_AUTO = 20e3;
+  var BATCH_SAVE_WAIT_MANUAL = 45e3;
+  var BATCH_TOAST_SEL = '.ngx-toastr, .toast, .toast-success, .toast-error, .toast-warning, .dx-toast-content, .dx-toast-message, .swal2-popup, .alert, .notyf__toast, .mat-snack-bar-container, .mat-mdc-snack-bar-container, .Toastify__toast, .noty_bar, .dx-popup-visible .dx-popup-content, .modal.show .modal-body, [role="alert"]';
+  var BATCH_INVALID_SEL = ".dx-invalid, .dx-validationsummary-item, .is-invalid";
+  var BATCH_OK_RE = /thành công|đã lưu|lưu xong/i;
+  var BATCH_ERR_RE = /lỗi|thất bại|không thành công|chưa thành công|không thể|không hợp lệ|bắt buộc|chưa nhập|trùng|error|failed/i;
+  var BATCH_YES_RE = /^(Đồng ý|OK|Có|Xác nhận)$/i;
+  var BATCH_NO_RE = /^(Hủy|Huỷ|Không|Đóng|Bỏ qua|Cancel)$/i;
+  var batchOpBusy = false;
+  function batchModeOf(st) {
+    return st.mode || (st.autoSave ? "auto_stop" : "manual");
+  }
+  function batchModeLabel(st) {
+    var m = batchModeOf(st);
+    return m === "auto_skip" ? "tự động, bỏ qua lỗi" : m === "auto_stop" ? "tự động Lưu, dừng khi lỗi" : "Lưu tay";
+  }
+  function batchTxt(el) {
+    return (el.textContent || "").replace(/\s+/g, " ").trim();
+  }
+  function batchDialogBox(el) {
+    return el.closest(".dx-popup-wrapper, .modal.show, .swal2-popup");
+  }
+  function batchIsConfirmBox(box) {
+    if (!box) return false;
+    var yes = false, no = false;
+    box.querySelectorAll("button").forEach(function(b) {
+      var t = (b.textContent || "").trim();
+      if (BATCH_YES_RE.test(t)) yes = true;
+      if (BATCH_NO_RE.test(t)) no = true;
+    });
+    return yes && no;
+  }
+  function batchSaveSnap() {
+    var m = new Map;
+    document.querySelectorAll(BATCH_TOAST_SEL).forEach(function(el) {
+      m.set(el, batchTxt(el));
+    });
+    return {
+      toasts: m,
+      invalid: document.querySelectorAll(BATCH_INVALID_SEL).length
+    };
+  }
+  function batchSaveScan(snap) {
+    var res = {
+      ok: false,
+      err: ""
+    };
+    document.querySelectorAll(BATCH_TOAST_SEL).forEach(function(el) {
+      if (el.closest("#_medinet_toast, #_mtt_batch_bar, #_mtt_batch_modal")) return;
+      var t = batchTxt(el);
+      if (!t || t.length > 500 || snap.toasts.get(el) === t) return;
+      var r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      if (batchIsConfirmBox(batchDialogBox(el))) return;
+      var isErr = BATCH_ERR_RE.test(t) || !!el.closest(".toast-error, .dx-toast-error, .alert-danger") || !!el.querySelector(".swal2-icon-error");
+      var isOk = BATCH_OK_RE.test(t) || !!el.closest(".toast-success, .dx-toast-success, .alert-success") || !!el.querySelector(".swal2-icon-success");
+      if (isErr) {
+        if (!res.err) res.err = t;
+      } else if (isOk) res.ok = true;
+    });
+    if (!res.err && document.querySelectorAll(BATCH_INVALID_SEL).length > snap.invalid) res.err = "có ô dữ liệu chưa hợp lệ";
+    return res;
+  }
+  function batchWatchSave(auto, onResult) {
+    var snap = batchSaveSnap();
+    var t0 = Date.now(), wait = auto ? BATCH_SAVE_WAIT_AUTO : BATCH_SAVE_WAIT_MANUAL;
+    var clicked = [], okAt = 0, finished = false;
+    function finish(ok, detail) {
+      if (finished) return;
+      finished = true;
+      onResult(ok, detail);
+    }
+    if (auto) {
+      var btns = findToolbarSaveButtons();
+      if (!btns.length) {
+        finish(false, "không tìm thấy nút Lưu thay đổi");
+        return;
+      }
+      pointerClick(btns[0]);
+    }
+    (function poll() {
+      if (finished) return;
+      var sc = batchSaveScan(snap);
+      if (sc.err) {
+        finish(false, sc.err);
+        return;
+      }
+      if (sc.ok) {
+        if (!okAt) okAt = Date.now();
+        if (Date.now() - okAt >= 800) {
+          finish(true, "");
+          return;
+        }
+      }
+      if (auto) {
+        Array.prototype.slice.call(document.querySelectorAll(".dx-popup-visible button, .modal.show button")).forEach(function(b) {
+          if (clicked.indexOf(b) !== -1) return;
+          if (!BATCH_YES_RE.test((b.textContent || "").trim())) return;
+          var box = batchDialogBox(b);
+          if (box && !batchIsConfirmBox(box) && BATCH_ERR_RE.test(batchTxt(box))) return;
+          clicked.push(b);
+          pointerClick(b);
+        });
+      }
+      if (!okAt && Date.now() - t0 > wait) {
+        finish(false, "không thấy thông báo lưu thành công sau " + Math.round(wait / 1e3) + " giây");
+        return;
+      }
+      setTimeout(poll, 250);
+    })();
+  }
+  function batchSaveRun(st, auto) {
+    var idx0 = st.idx;
+    batchOpBusy = true;
+    st.phase = "saving";
+    st.msg = "💾 Đang chờ Medinet xác nhận đã lưu…";
+    batchSetState(st);
+    batchWatchSave(auto, function(ok, detail) {
+      batchOpBusy = false;
+      var cur = batchGetState();
+      if (!cur || !cur.active || cur.idx !== idx0) return;
+      if (ok) {
+        cur.stats.done++;
+        batchLogRow(cur, "Thành công", "");
+        showToast("💾 Medinet xác nhận đã lưu — chuyển sang người tiếp theo", "success");
+        batchAdvance(cur);
+      } else if (batchModeOf(cur) === "auto_skip") {
+        showToast("⚠ Chưa lưu được (" + detail + ") — bỏ qua, chạy người tiếp theo", "warn");
+        console.warn("[MTT] Bỏ qua do chưa xác nhận lưu:", detail);
+        batchSkipCurrent("chưa lưu được: " + detail);
+      } else {
+        cur.phase = "await_save";
+        cur.lastSaveErr = detail;
+        cur.msg = "⚠ Chưa lưu được (" + detail + ") — KHÔNG tự chuyển. Sửa rồi bấm \"Lưu thay đổi\" lại; nếu bạn thấy Medinet đã lưu thì bấm \"Đã lưu — chuyển tiếp\".";
+        batchSetState(cur);
+        batchHookManualSave(cur);
+        showToast("⚠ Chưa xác nhận được lưu: " + detail, "warn");
+        console.warn("[MTT] Chưa xác nhận lưu:", detail);
+      }
+    });
+  }
+  function batchLogRow(st, status, reason) {
+    if (!st.stats.log) st.stats.log = [];
+    var row = st.queue[st.idx];
+    st.stats.log.push({
+      cccd: row.cccd,
+      name: row.name || "",
+      status: status,
+      reason: reason || "",
+      time: batchNowStr()
+    });
+    if (status === "Thành công") batchDoneMark(row.cccd);
+  }
+  function batchSkipCurrent(reason) {
+    var st = batchGetState();
+    if (!st || !st.active) return;
+    var why = reason, status = reason === "người dùng bỏ qua" ? "Bỏ qua" : "Lỗi";
+    if (st.lastSaveErr && reason === "người dùng bỏ qua") {
+      why = "chưa lưu được: " + st.lastSaveErr;
+      status = "Lỗi";
+    }
+    st.stats.skip++;
+    st.stats.skipList.push(st.queue[st.idx].cccd + ": " + why);
+    batchLogRow(st, status, why);
+    batchAdvance(st);
+  }
+  function batchStatusMap(st) {
+    var map = {};
+    (st.stats.log || []).forEach(function(e) {
+      map[xlsNormCccd(e.cccd)] = {
+        status: e.status,
+        reason: e.reason
+      };
+    });
+    (st.queue || []).forEach(function(q, i) {
+      var k = xlsNormCccd(q.cccd);
+      if (!map[k] && i >= st.idx) map[k] = {
+        status: "Chưa xử lý",
+        reason: ""
+      };
+    });
+    (st.excluded || []).forEach(function(e) {
+      var k = xlsNormCccd(e.cccd);
+      if (!map[k]) map[k] = {
+        status: "Bỏ qua",
+        reason: e.reason
+      };
+    });
+    return map;
+  }
+  function batchExportLog(st) {
+    if (typeof XLSX === "undefined") {
+      showToast("❌ Chưa tải được thư viện xuất Excel", "error");
+      return;
+    }
+    var map = batchStatusMap(st);
+    var wb = XLSX.utils.book_new(), ws;
+    if (st.originalAoa && st.originalAoa.length) {
+      var out = st.originalAoa.map(function(row) {
+        return row.slice();
+      });
+      out[0].splice(2, 0, "Kết quả");
+      if (out[1]) out[1].splice(2, 0, "");
+      var seenX = {};
+      for (var i = 2; i < out.length; i++) {
+        var cccd = xlsNormCccd(out[i][1]);
+        var m = cccd ? map[cccd] : null;
+        var text = m ? m.reason ? m.status + ": " + m.reason : m.status : "";
+        if (cccd) {
+          if (seenX[cccd]) text = "Bỏ qua: trùng CCCD với dòng phía trên";
+          seenX[cccd] = true;
+        }
+        out[i].splice(2, 0, text);
+      }
+      ws = XLSX.utils.aoa_to_sheet(out);
+    } else {
+      var aoa2 = [ [ "STT", "CCCD", "Kết quả", "Họ tên", "Giờ" ] ];
+      Object.keys(map).forEach(function(k, i) {
+        aoa2.push([ i + 1, k, map[k].reason ? map[k].status + ": " + map[k].reason : map[k].status, "", "" ]);
+      });
+      ws = XLSX.utils.aoa_to_sheet(aoa2);
+    }
+    XLSX.utils.book_append_sheet(wb, ws, "Chế độ hàng loạt - log");
+    var d = new Date;
+    function p2(n) {
+      return (n < 10 ? "0" : "") + n;
+    }
+    var fname = "HangLoat_log_" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + "_" + p2(d.getHours()) + p2(d.getMinutes()) + ".xlsx";
+    XLSX.writeFile(wb, fname);
+  }
+  function batchAdvance(st) {
+    batchOpBusy = false;
+    st.msg = "";
+    st.lastSaveErr = "";
+    st.idx++;
+    if (st.idx >= st.queue.length) {
+      batchFinish(st);
+      return;
+    }
+    st.phase = "fill_cccd";
+    batchSetState(st);
+    var url = batchSearchUrl(st.queue[st.idx].group);
+    if (window.location.href.indexOf(url) === 0) {
+      setTimeout(batchTick, 200);
+    } else {
+      window.location.href = url;
+    }
+  }
+  function batchDoSave(st) {
+    batchSaveRun(st, true);
+  }
+  function batchHookManualSave(st) {
+    if (batchManualHooked) return;
+    batchManualHooked = true;
+    document.addEventListener("click", function onSave(e) {
+      var btns = findToolbarSaveButtons();
+      if (btns.indexOf(e.target) === -1 && !btns.some(function(b) {
+        return b.contains(e.target);
+      })) return;
+      document.removeEventListener("click", onSave, true);
+      batchManualHooked = false;
+      var cur = batchGetState();
+      if (!cur || !cur.active) return;
+      batchSaveRun(cur, false);
+    }, true);
+  }
+  function batchTick() {
+    if (batchTicking) return;
+    var st = batchGetState();
+    if (!st || !st.active) {
+      batchHideBar();
+      return;
+    }
+    if (!isLicenseValid()) {
+      showLicenseExpiredPopup();
+      batchStop();
+      return;
+    }
+    batchShowBar(st);
+    var row = st.queue[st.idx];
+    if (!row) {
+      batchFinish(st);
+      return;
+    }
+    batchTicking = true;
+    function done() {
+      batchTicking = false;
+    }
+    if (st.phase === "fill_cccd") {
+      var wantUrl = batchSearchUrl(row.group);
+      if (window.location.href.indexOf(wantUrl) !== 0) {
+        done();
+        batchSetState(st);
+        window.location.href = wantUrl;
+        return;
+      }
+      batchWaitFor(batchFindCccdInput).then(function(inp) {
+        if (!inp) {
+          done();
+          batchSkipCurrent("không thấy ô Định danh cá nhân");
+          return;
+        }
+        batchSetCccdInput(inp, row.cccd);
+        var checkStart = Date.now();
+        (function verifyTyped() {
+          if (inp.value && xlsNormCccd(inp.value) === row.cccd) {
+            inp.dispatchEvent(new KeyboardEvent("keydown", {
+              key: "Enter",
+              code: "Enter",
+              keyCode: 13,
+              which: 13,
+              bubbles: true,
+              cancelable: true
+            }));
+            inp.dispatchEvent(new KeyboardEvent("keyup", {
+              key: "Enter",
+              code: "Enter",
+              keyCode: 13,
+              which: 13,
+              bubbles: true,
+              cancelable: true
+            }));
+            setTimeout(function() {
+              var btn = batchFindXemBtn();
+              if (btn) fullClick(btn);
+              st.phase = "open_edit";
+              batchSetState(st);
+              done();
+              setTimeout(batchTick, 900);
+            }, 350);
+            return;
+          }
+          if (Date.now() - checkStart > 2500) {
+            done();
+            batchSkipCurrent("không gõ được CCCD vào ô Định danh cá nhân (giá trị ô không khớp sau khi điền — có thể trang chưa tải xong)");
+            return;
+          }
+          setTimeout(verifyTyped, 200);
+        })();
+      });
+      return;
+    }
+    if (st.phase === "open_edit") {
+      batchWaitFor(function() {
+        return batchFindResultRow(row.cccd);
+      }, 12e3).then(function(r) {
+        done();
+        if (!r) {
+          if (!row.triedOtherGroup) {
+            row.triedOtherGroup = true;
+            row.group = row.group === "nct" ? "m3" : "nct";
+            st.phase = "fill_cccd";
+            batchSetState(st);
+            setTimeout(batchTick, 200);
+            return;
+          }
+          batchSkipCurrent("không tìm thấy ở cả 2 danh sách (M3 và Người cao tuổi) — kiểm tra lại CCCD hoặc bệnh nhân chưa có trên hệ thống");
+          return;
+        }
+        if (row.group === "nct") {
+          var cog = batchFindNctCogBtn(r);
+          if (!cog) {
+            batchSkipCurrent("không thấy nút thao tác (⚙) trên dòng kết quả");
+            return;
+          }
+          pointerClick(cog);
+          st.phase = "nct_menu";
+          batchSetState(st);
+        } else {
+          var a = batchFindM3EditLink(r);
+          if (!a) {
+            batchSkipCurrent("không thấy nút Chỉnh sửa trên dòng kết quả");
+            return;
+          }
+          pointerClick(a);
+          st.phase = "open_cls";
+          batchSetState(st);
+        }
+        setTimeout(batchTick, 700);
+      });
+      return;
+    }
+    if (st.phase === "nct_menu") {
+      batchWaitFor(batchFindDropdownEditLink, 6e3).then(function(a) {
+        done();
+        if (!a) {
+          batchSkipCurrent("không thấy mục Chỉnh sửa trong menu");
+          return;
+        }
+        pointerClick(a);
+        st.phase = "open_cls";
+        batchSetState(st);
+        setTimeout(batchTick, 700);
+      });
+      return;
+    }
+    if (st.phase === "open_cls") {
+      var itemId = batchClsItemId(row.group);
+      batchWaitFor(function() {
+        return batchFindTreeItem(itemId);
+      }, 15e3).then(function(li) {
+        done();
+        if (!li) {
+          batchSkipCurrent("không thấy mục Khám cận lâm sàng");
+          return;
+        }
+        pointerClick(li.querySelector(".dx-item-content") || li);
+        st.phase = "on_form";
+        batchSetState(st);
+        setTimeout(batchTick, 900);
+      });
+      return;
+    }
+    if (st.phase === "filling" || st.phase === "saving") {
+      if (!batchOpBusy) {
+        if (st.phase === "saving" && batchModeOf(st) === "auto_skip") {
+          done();
+          batchSkipCurrent("trang tải lại khi đang lưu — chưa xác nhận được đã lưu");
+          return;
+        }
+        if (st.phase === "filling") {
+          st.phase = "on_form";
+        } else {
+          st.phase = "await_save";
+          st.msg = "⚠ Trang vừa tải lại khi đang lưu — chưa xác nhận được đã lưu. Kiểm tra rồi bấm \"Lưu thay đổi\" lại, hoặc \"Đã lưu — chuyển tiếp\" nếu Medinet đã lưu.";
+        }
+        batchSetState(st);
+      }
+      done();
+      return;
+    }
+    if (st.phase === "await_save") {
+      batchHookManualSave(st);
+      done();
+      return;
+    }
+    if (st.phase === "on_form") {
+      batchWaitFor(function() {
+        return xlsPageIsCls() && xlsGetPageCccd() === row.cccd && document.querySelector(".CongThucMau_SLHC input.dx-texteditor-input") ? true : null;
+      }, 2e4).then(function(ok) {
+        done();
+        if (!ok) {
+          batchSkipCurrent("trang Cận lâm sàng không tải đúng bệnh nhân");
+          return;
+        }
+        st.phase = "filling";
+        st.msg = "";
+        batchSetState(st);
+        batchOpBusy = true;
+        xlsIdbGet("file").then(function(h) {
+          if (!h) throw new Error("no-handle");
+          return xlsReadHandle(h);
+        }).then(function(r2) {
+          var rows = xlsParseBuffer(r2.buf);
+          var n = xlsFillFromRows(rows, "Chế độ hàng loạt " + (st.idx + 1) + "/" + st.queue.length);
+          if (!n) {
+            batchSkipCurrent("không điền được ô nào (CCCD không có trong Excel hoặc trang chưa sẵn sàng) — không lưu");
+            return;
+          }
+          spendCredits(n + (st.autoSave ? BATCH_SURCHARGE_AUTO : BATCH_SURCHARGE_MANUAL));
+          if (st.autoSave) {
+            batchDoSave(st);
+          } else {
+            st.phase = "await_save";
+            st.msg = "✏️ Đã điền — kiểm tra rồi bấm \"Lưu thay đổi\"; chỉ khi Medinet báo lưu thành công mới tự chuyển người tiếp theo (" + (st.idx + 1) + "/" + st.queue.length + ")";
+            batchSetState(st);
+            batchOpBusy = false;
+            batchHookManualSave(st);
+          }
+        }).catch(function(err) {
+          batchSkipCurrent("lỗi điền dữ liệu: " + (err && err.message ? err.message : err));
+        });
+      });
+      return;
+    }
+    done();
+  }
+  function batchBuildQueue(rows, skipDone) {
+    var queue = [], excluded = [], seen = {}, dup = 0, doneSkipped = 0;
+    var doneMap = skipDone ? batchDoneRead() : {};
+    rows.forEach(function(r) {
+      if (seen[r.cccd]) {
+        dup++;
+        return;
+      }
+      seen[r.cccd] = true;
+      if (doneMap[r.cccd]) {
+        excluded.push({
+          cccd: r.cccd,
+          name: r.name,
+          kind: "done",
+          reason: "đã điền thành công ở lần chạy trước (" + batchFmtStamp(doneMap[r.cccd]) + ")"
+        });
+        doneSkipped++;
+        return;
+      }
+      var g = batchAgeGroupFromRow(r);
+      if (!g) {
+        excluded.push({
+          cccd: r.cccd,
+          name: r.name,
+          kind: "age",
+          reason: "không xác định được năm sinh hoặc dưới 18 tuổi"
+        });
+        return;
+      }
+      queue.push({
+        cccd: r.cccd,
+        name: r.name,
+        group: g
+      });
+    });
+    queue.sort(function(a, b) {
+      return a.group === b.group ? 0 : a.group === "m3" ? -1 : 1;
+    });
+    return {
+      queue: queue,
+      excluded: excluded,
+      dup: dup,
+      doneSkipped: doneSkipped
+    };
+  }
+  function batchShowStartModal(rows) {
+    var builtOn = batchBuildQueue(rows, true), builtOff = batchBuildQueue(rows, false);
+    var built = builtOn;
+    var ID = "_mtt_batch_modal";
+    var old = document.getElementById(ID);
+    if (old) old.remove();
+    var overlay = document.createElement("div");
+    overlay.id = ID;
+    Object.assign(overlay.style, {
+      position: "fixed",
+      inset: "0",
+      background: "rgba(0,0,0,0.45)",
+      zIndex: "2147483003",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    });
+    var card = document.createElement("div");
+    Object.assign(card.style, {
+      background: "#fff",
+      borderRadius: "10px",
+      padding: "18px",
+      width: "440px",
+      maxWidth: "92vw",
+      fontFamily: "Segoe UI, Arial, sans-serif",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+    });
+    var title = document.createElement("div");
+    title.style.cssText = "font-size:15px;font-weight:700;color:#0f766e;margin-bottom:10px;";
+    card.appendChild(title);
+    var mw = document.createElement("div");
+    mw.style.cssText = "font-size:12px;color:#b91c1c;margin-bottom:10px;line-height:1.5;";
+    card.appendChild(mw);
+    var dupNote = document.createElement("div");
+    dupNote.style.cssText = "font-size:12px;color:#1d4ed8;margin-bottom:10px;line-height:1.5;";
+    card.appendChild(dupNote);
+    var doneCb = null;
+    if (builtOn.doneSkipped > 0) {
+      var doneLabel = document.createElement("label");
+      doneLabel.style.cssText = "display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#111;margin-bottom:10px;cursor:pointer;";
+      doneCb = document.createElement("input");
+      doneCb.type = "checkbox";
+      doneCb.checked = true;
+      doneLabel.appendChild(doneCb);
+      doneLabel.appendChild(document.createTextNode("Bỏ qua " + builtOn.doneSkipped + " người đã điền thành công ở lần chạy trước (nhớ 7 ngày)"));
+      card.appendChild(doneLabel);
+    }
+    var doneTotal = Object.keys(batchDoneRead()).length;
+    if (doneTotal > 0) {
+      var clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.textContent = "🗑 Xóa danh sách người đã điền (" + doneTotal + " người)";
+      clearBtn.style.cssText = "display:block;border:none;background:none;color:#6b7280;font-size:12px;cursor:pointer;padding:0;margin:0 0 12px;text-decoration:underline;";
+      clearBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        batchDoneClear();
+        showToast("🗑 Đã xóa danh sách người đã điền thành công", "warn");
+        overlay.remove();
+        batchShowStartModal(rows);
+      });
+      card.appendChild(clearBtn);
+    }
+    var MODES = [ {
+      v: "manual",
+      t: "Bấm Lưu tay (mặc định)",
+      d: "Script chỉ điền; bạn kiểm tra rồi bấm \"Lưu thay đổi\". Chỉ khi Medinet báo lưu thành công mới tự chuyển người. Phụ thu " + BATCH_SURCHARGE_MANUAL / 100 + " Medi/người."
+    }, {
+      v: "auto_stop",
+      t: "Tự động bấm Lưu sau khi điền, dừng lại khi lỗi",
+      d: "Lưu lỗi hoặc không xác nhận được thì DỪNG tại người đó để bạn xử lý. Phụ thu " + BATCH_SURCHARGE_AUTO / 100 + " Medi/người."
+    }, {
+      v: "auto_skip",
+      t: "Tự động hàng loạt, bỏ qua lỗi",
+      d: "Lưu lỗi thì ghi log rồi chạy tiếp người sau, không dừng. Sửa tay sau khi chạy xong (xuất log Excel để xem danh sách lỗi). Phụ thu " + BATCH_SURCHARGE_AUTO / 100 + " Medi/người."
+    } ];
+    var modeVal = "manual";
+    var modeRows = [];
+    var modeBox = document.createElement("div");
+    modeBox.style.cssText = "display:flex;flex-direction:column;gap:6px;margin-bottom:10px;";
+    MODES.forEach(function(m, i) {
+      var lab = document.createElement("label");
+      lab.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;";
+      var rb = document.createElement("input");
+      rb.type = "radio";
+      rb.name = "_mtt_batch_mode";
+      rb.value = m.v;
+      rb.checked = i === 0;
+      rb.style.marginTop = "3px";
+      var txtBox = document.createElement("div");
+      var tt = document.createElement("div");
+      tt.textContent = m.t;
+      tt.style.cssText = "font-size:13px;font-weight:700;color:#111;";
+      var dd = document.createElement("div");
+      dd.textContent = m.d;
+      dd.style.cssText = "font-size:11.5px;color:#6b7280;line-height:1.5;margin-top:2px;";
+      txtBox.appendChild(tt);
+      txtBox.appendChild(dd);
+      lab.appendChild(rb);
+      lab.appendChild(txtBox);
+      rb.addEventListener("change", function() {
+        modeVal = m.v;
+        paintModes();
+      });
+      modeRows.push({
+        lab: lab,
+        v: m.v
+      });
+      modeBox.appendChild(lab);
+    });
+    card.appendChild(modeBox);
+    var warn = document.createElement("div");
+    warn.style.cssText = "font-size:12px;color:#b45309;margin-bottom:12px;line-height:1.5;";
+    card.appendChild(warn);
+    function paintModes() {
+      modeRows.forEach(function(r) {
+        var on = r.v === modeVal;
+        r.lab.style.borderColor = on ? "#0f766e" : "#e5e7eb";
+        r.lab.style.background = on ? "#f0fdfa" : "#fff";
+      });
+      warn.textContent = modeVal === "auto_skip" ? "⚠ Người bị lỗi sẽ KHÔNG được lưu — chạy xong nhớ xuất log Excel và sửa tay các dòng \"Lỗi\"." : "⚠ Tính năng mới — nên thử vài người ở chế độ \"Bấm Lưu tay\" trước khi chạy hàng loạt.";
+    }
+    paintModes();
+    function mkBtn(text, bg, color, onClick) {
+      var b = document.createElement("button");
+      b.textContent = text;
+      Object.assign(b.style, {
+        display: "block",
+        width: "100%",
+        padding: "10px",
+        margin: "8px 0 0",
+        border: "none",
+        borderRadius: "6px",
+        background: bg,
+        color: color,
+        fontSize: "13px",
+        fontWeight: "600",
+        cursor: "pointer"
+      });
+      b.addEventListener("click", function(e) {
+        e.preventDefault();
+        overlay.remove();
+        onClick();
+      });
+      return b;
+    }
+    var startBtn = mkBtn("", "#0f766e", "#fff", function() {
+      if (!built.queue.length) {
+        showToast("⚠ Không có bệnh nhân cần xử lý (tất cả đã điền, trùng hoặc không hợp lệ)", "warn");
+        return;
+      }
+      var st = {
+        active: true,
+        idx: 0,
+        phase: "fill_cccd",
+        autoSave: modeVal !== "manual",
+        mode: modeVal,
+        queue: built.queue,
+        excluded: built.excluded,
+        originalAoa: _xlsLastAoa,
+        stats: {
+          done: 0,
+          skip: 0,
+          skipList: [],
+          log: []
+        }
+      };
+      batchSetState(st);
+      var url0 = batchSearchUrl(built.queue[0].group);
+      if (window.location.href.indexOf(url0) === 0) setTimeout(batchTick, 200); else window.location.href = url0;
+    });
+    function refresh() {
+      built = doneCb && !doneCb.checked ? builtOff : builtOn;
+      var m3n = built.queue.filter(function(q) {
+        return q.group === "m3";
+      }).length;
+      var nctn = built.queue.length - m3n;
+      title.textContent = "🔎 Chế độ hàng loạt — " + built.queue.length + " bệnh nhân (M3: " + m3n + ", NCT: " + nctn + ")";
+      var ageN = built.excluded.filter(function(e) {
+        return e.kind === "age";
+      }).length;
+      mw.style.display = ageN ? "" : "none";
+      mw.textContent = "⚠ " + ageN + " dòng không xác định được năm sinh hoặc dưới 18 tuổi — sẽ bị bỏ qua (xem chi tiết trong log xuất ra).";
+      var notes = [];
+      if (built.dup) notes.push(built.dup + " dòng trùng CCCD trong file — chỉ xử lý 1 lần");
+      if (built.doneSkipped) notes.push(built.doneSkipped + " người đã điền thành công trước đó — bỏ qua");
+      dupNote.style.display = notes.length ? "" : "none";
+      dupNote.textContent = "ℹ " + notes.join("; ") + " (xem chi tiết trong log xuất ra).";
+      startBtn.textContent = "▶ Bắt đầu (" + built.queue.length + " người)";
+    }
+    if (doneCb) doneCb.addEventListener("change", refresh);
+    refresh();
+    card.appendChild(startBtn);
+    card.appendChild(mkBtn("Đóng", "#e5e7eb", "#111", function() {}));
+    overlay.appendChild(card);
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+  function batchPickFileThen(cb) {
+    if (typeof _pageWin.showOpenFilePicker !== "function" || !_pageWin.indexedDB) {
+      showToast("⚠ Trình duyệt không hỗ trợ Chế độ hàng loạt (cần Chrome/Edge)", "warn");
+      return;
+    }
+    xlsIdbGet("file").then(function(h) {
+      if (!h) {
+        showToast("⚠ Chưa chọn file Excel — bấm nút Điền kết quả CLS để chọn file trước", "warn");
+        return;
+      }
+      return xlsReadHandle(h).then(function(r) {
+        cb(xlsParseBuffer(r.buf));
+      });
+    }).catch(xlsHandleError);
+  }
+  var BATCH_ENABLED = false;
+  function batchStart() {
+    if (!BATCH_ENABLED) return;
+    if (!isLicenseValid()) {
+      showLicenseExpiredPopup();
+      return;
+    }
+    batchPickFileThen(function(rows) {
+      batchShowStartModal(rows);
+    });
+  }
+  var BATCH_FLOAT_ID = "_mtt_batch_float";
+  function batchUpdateFloatBtn() {
+    var btn = document.getElementById(BATCH_FLOAT_ID);
+    var st = batchGetState();
+    var show = isScriptEnabled() && !_wrapperHidden && (xlsPageIsCls() || st && st.active);
+    if (!show) {
+      if (btn) btn.remove();
+      return;
+    }
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = BATCH_FLOAT_ID;
+      btn.type = "button";
+      Object.assign(btn.style, {
+        position: "fixed",
+        zIndex: "2000000",
+        top: "248px",
+        right: "24px",
+        padding: "10px 16px",
+        background: "#7c3aed",
+        color: "#fff",
+        border: "none",
+        borderRadius: "999px",
+        fontSize: "14px",
+        fontWeight: "700",
+        cursor: "pointer",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
+        fontFamily: "Segoe UI, Arial, sans-serif",
+        whiteSpace: "nowrap"
+      });
+      btn.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!BATCH_ENABLED) return;
+        var cur = batchGetState();
+        if (cur && cur.active) {
+          batchTick();
+          return;
+        }
+        batchStart();
+      });
+      document.body.appendChild(btn);
+    }
+    var cur = batchGetState();
+    if (!BATCH_ENABLED) {
+      btn.textContent = "🔎 Chế độ hàng loạt (đang phát triển)";
+      btn.disabled = true;
+      btn.title = "Tính năng đang phát triển, tạm thời chưa dùng được";
+      btn.style.opacity = "0.45";
+      btn.style.cursor = "not-allowed";
+      btn.style.filter = "grayscale(0.6)";
+      return;
+    }
+    btn.disabled = false;
+    btn.title = "";
+    btn.style.opacity = "";
+    btn.style.cursor = "pointer";
+    btn.style.filter = "";
+    btn.textContent = cur && cur.active ? "🔎 Đang chạy (" + (cur.idx + 1) + "/" + cur.queue.length + ")" : "🔎 Chế độ hàng loạt";
+  }
+  setInterval(batchUpdateFloatBtn, 900);
+  setInterval(function() {
+    if (!BATCH_ENABLED) return;
+    var st = batchGetState();
+    if (st && st.active) batchTick();
+  }, 1500);
+  setTimeout(function() {
+    if (!BATCH_ENABLED) return;
+    var st = batchGetState();
+    if (st && st.active) batchTick();
+  }, 2e3);
   var ACTIONS = [ {
     emoji: "📄",
     label: "Thông tin hành chính TE <6T",
@@ -4602,6 +6332,21 @@
     fn: function() {
       xlsStart();
     }
+  }, {
+    emoji: "🔎",
+    label: "Chế độ hàng loạt — Tự tìm & điền theo Excel",
+    tier: "pro",
+    color: "#7c3aed",
+    hoverColor: "#6d28d9",
+    noAgeLogic: true,
+    check: function() {
+      var h = window.location.href;
+      return h.indexOf("KSKDK_DanhSach_KSK_M13") !== -1 || h.indexOf("KSKDK_DanhSach_KSK_NguoiCaoTuoi_Report") !== -1 || h.indexOf("KSKDK_Phieu_CanLamSang") !== -1 || h.indexOf("KNCT_PhieuCLS_CanLamSang") !== -1;
+    },
+    selfBills: true,
+    fn: function() {
+      batchStart();
+    }
   } ];
   var WALLET_API = "https://medinet-wallet.dha-medinet.workers.dev";
   var WALLET_KEY = "_mtt_wallet_cache_v1";
@@ -4614,6 +6359,19 @@
       var saved = GM_getValue(DEVICE_SECRET_KEY, null);
       if (saved && typeof saved === "string" && saved.length >= 32) {
         _deviceSecret = saved;
+        try {
+          if (localStorage.getItem(DEVICE_SECRET_KEY) !== saved) localStorage.setItem(DEVICE_SECRET_KEY, saved);
+        } catch (e2) {}
+        return _deviceSecret;
+      }
+    } catch (e) {}
+    try {
+      var bak = localStorage.getItem(DEVICE_SECRET_KEY);
+      if (bak && typeof bak === "string" && bak.length >= 32) {
+        _deviceSecret = bak;
+        try {
+          GM_setValue(DEVICE_SECRET_KEY, bak);
+        } catch (e3) {}
         return _deviceSecret;
       }
     } catch (e) {}
@@ -4624,6 +6382,9 @@
     }).join("");
     try {
       GM_setValue(DEVICE_SECRET_KEY, hex);
+    } catch (e) {}
+    try {
+      localStorage.setItem(DEVICE_SECRET_KEY, hex);
     } catch (e) {}
     _deviceSecret = hex;
     return _deviceSecret;
@@ -4792,9 +6553,61 @@
       return "errfont";
     }
   }
-  function getMachineId() {
+  function _computeFingerprintMid() {
+    // ===== THUAT TOAN GOC (v14.19) - TUYET DOI KHONG SUA =====
+    // Chi dung de sinh MID LAN DAU khi chua co MID luu san.
     var raw = [ navigator.platform || "", (screen.width || 0) + "x" + (screen.height || 0), (screen.availWidth || 0) + "x" + (screen.availHeight || 0), (screen.colorDepth || 0) + "", (window.devicePixelRatio || 1) + "", navigator.language || "", (navigator.languages || []).join(","), (navigator.hardwareConcurrency || 0) + "", (navigator.deviceMemory || 0) + "", (navigator.maxTouchPoints || 0) + "", (new Date).getTimezoneOffset() + "", _fpWebGL(), _fpCanvas(), _fpFonts() ].join("||");
     return "MID-" + _djb2(raw);
+  }
+  // ================================================================
+  //  MID BEN VUNG (v14.20) - KHONG DOI TEN KHOA, KHONG DOI LOGIC
+  //  Thu tu uu tien: (1) GM da luu -> (2) localStorage sao luu ->
+  //  (3) MID cu trong cache vi da ky (khach nang cap tu ban truoc) ->
+  //  (4) tinh van tay 1 LAN roi luu lai vinh vien.
+  // ================================================================
+  var MID_KEY = "_mtt_machine_id_v1";
+  var MID_BACKUP_KEY = "_mtt_machine_id_bak_v1";
+  var _midCached = null;
+  function _isValidMid(v) {
+    return typeof v === "string" && /^MID-[0-9A-F]{8}$/.test(v);
+  }
+  function _saveMid(mid) {
+    try {
+      GM_setValue(MID_KEY, mid);
+    } catch (e) {}
+    try {
+      localStorage.setItem(MID_BACKUP_KEY, mid);
+    } catch (e) {}
+  }
+  function _midFromWalletCache() {
+    try {
+      var raw = GM_getValue(WALLET_KEY, null);
+      if (!raw || typeof raw !== "string" || raw.indexOf(".") === -1) return null;
+      var payloadPart = raw.split(".")[0];
+      var payload = JSON.parse((new TextDecoder).decode(base64UrlToBytes(payloadPart)));
+      return payload && _isValidMid(payload.mid) ? payload.mid : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function getMachineId() {
+    if (_midCached) return _midCached;
+    var mid = null;
+    try {
+      mid = GM_getValue(MID_KEY, null);
+    } catch (e) {}
+    if (!_isValidMid(mid)) {
+      mid = null;
+      try {
+        var bak = localStorage.getItem(MID_BACKUP_KEY);
+        if (_isValidMid(bak)) mid = bak;
+      } catch (e) {}
+    }
+    if (!mid) mid = _midFromWalletCache();
+    if (!mid) mid = _computeFingerprintMid();
+    _midCached = mid;
+    _saveMid(mid);
+    return mid;
   }
   var WALLET_UNSYNCED_KEY = "_mtt_unsynced_clicks_v1";
   function getUnsyncedClicks() {
